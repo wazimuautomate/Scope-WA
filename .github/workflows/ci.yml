@@ -32,8 +32,18 @@ jobs:
         with:
           gradle-version: "8.9"
 
-      - name: Unit test the brain layer
+      - name: Unit test the pure-Kotlin layers
         run: gradle testDebugUnitTest --stacktrace
+
+      # Uploaded even when the tests fail — that's when the report is worth
+      # having, and there's no local Android Studio to reproduce a failure in.
+      - name: Upload unit test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-report
+          path: app/build/reports/tests/testDebugUnitTest
+          retention-days: 14
 
       - name: Assemble debug APK
         run: gradle assembleDebug --stacktrace
