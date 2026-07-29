@@ -16,7 +16,7 @@ parallel sessions, which is why several say "code complete, not verified".
 | 2 — Contacts | **Done**, merged to `features` (PR #3) |
 | 3 — Templates | Code complete, emulator-verified, PR #2 open into `features` |
 | 4 — Group extractor | In progress in another session |
-| 5 — Bulk sender | Code complete, PR into `features`. **Not device-verified.** |
+| 5 — Bulk sender | Code complete, merged to `features`. Reply listener added as a follow-up PR. **Not device-verified.** |
 | 6 — Activity log / reports | Not started |
 | 7 — Group adder | Not started, ships last on purpose |
 
@@ -47,9 +47,18 @@ parallel sessions, which is why several say "code complete, not verified".
 ### Phase 5 specifics
 
 Composer, send routine, real foreground service, live progress and the
-`brain/campaign/` decision logic are built and CI-green (217 unit tests). Its
+`brain/campaign/` decision logic are built and CI-green. Its
 BUILD-PLAN acceptance criterion — "a manual device test sending to a small set
 of real test numbers with visibly randomised pacing" — is **not** met.
+
+The follow-up added reply reading: `accessibility/WaNotificationListener` plus
+pure `brain/reply/` (`ReplyNotificationParser`, `ReplyRouter`), reply columns on
+`campaign_messages` / `contacts`, and the re-enabled `ColdBatchNoReplies`. **The
+notification heuristics are the least verified code in the repo** — WhatsApp's
+notification shapes were not captured from a handset, and no unit test can tell
+you what a real Samsung running Swahili actually posts. When the handset test
+below happens, add a step: reply to a test campaign from a saved contact, from
+an unsaved number, and from a group, and check the opt-out lands.
 
 **Phase 5 carries Phase 3 in its history.** Phase 5 depends on Phase 3 and
 Phase 3 had not merged yet, so `phase-3-templates` was merged into
@@ -97,6 +106,11 @@ rewriting. **Phase 3's PR #2 should still land on its own merits.**
 - **Contacts keep a `custom_fields` map of the leftover CSV columns.** Section 6
   layer 1 promises any CSV column can be a template variable; without this
   Phase 5 would have nothing to substitute.
+- **Room schema is at version 2.** The reply listener added
+  `campaign_messages.replied_at` / `reply_count` and `contacts.last_replied_at`.
+  Bumping the version rather than editing v1 in place is what keeps
+  `fallbackToDestructiveMigration()` from throwing an identity-hash error on a
+  dev phone that already has the old database.
 - **Room schema export is off and migrations are destructive, deliberately, and
   only until the first release.** Nothing has shipped, so there's no user data
   to migrate and a committed schema would just record guesses later phases
@@ -126,8 +140,44 @@ rewriting. **Phase 3's PR #2 should still land on its own merits.**
 - **`CircuitBreaker`'s cold-batch rule is true for all-zero input** (`0 >= 0 &&
   0 == 0`), so a campaign would auto-pause with `ColdBatchNoReplies` before its
   first message. `CampaignEngine` disables the rule until a batch is genuinely
-  being counted rather than editing a Phase 0 rule other phases depend on. If
-  reply tracking is ever wired up, revisit this.
+  being counted rather than editing a Phase 0 rule other phases depend on.
+  **Revisited by the reply-listener work (2026-07-29):** the rule is on again,
+  now gated on `EngineState.replyTrackingAvailable` *as well as* a started
+  batch. `CampaignJobService` sets that from
+  `NotificationPermission.isGranted`, re-read every loop iteration so revoking
+  the permission mid-campaign disables the rule instead of pausing the run.
+  Ungranted → the reply count is zero by construction, which says nothing about
+  the list, so the rule must stay off. `CircuitBreaker` itself is still
+  untouched.
+- **Replies are read with a `NotificationListenerService`, not by scraping the
+  chat list with the Accessibility service** (2026-07-29). This was the last
+  open item blocking architecture doc section 6 layer 3. The Accessibility
+  service can only read a screen that is *on screen*, and the campaign phone is
+  meant to sit untouched for hours (section 10, Q4) — so chat-list reading
+  would have meant either driving WhatsApp to the foreground on a timer, which
+  is exactly the visible robotic behaviour the pacing layer exists to avoid, or
+  seeing none of the replies. The trade-offs accepted:
+  - **A second scary permission, and a phone-wide one.** Android cannot scope
+    notification access to a single app the way `accessibility_service_config`
+    scopes the Accessibility service. Compensated in code, not in the prompt:
+    `ReplyNotificationParser` discards everything that isn't `com.whatsapp` /
+    `com.whatsapp.w4b` first, and **no message body is ever stored, logged or
+    exported** — only a reply count, a timestamp, and the matched keyword for
+    an opt-out. The setup step says all of this in plain words.
+  - **It is optional and stays optional.** `SetupUiState.isReady` deliberately
+    does not require it; campaigns run without it and opt-outs are then marked
+    by hand, as before.
+  - **Notifications are lossy.** A reply read while the user has WhatsApp open,
+    or on a phone whose notifications for that chat are muted, is never posted
+    and never seen. This is a real hole with no fix at this layer.
+  - **Attribution is name-based about half the time.** A WhatsApp notification
+    carries a number only for *unsaved* senders; for saved ones it carries
+    whatever the address book calls them. `ReplyRouter` matches by number when
+    it can, by exact name when it can't, and ignores anything ambiguous rather
+    than opting out the wrong person.
+  - **Group messages are parsed so they can be recognised and ignored**, not so
+    they can be acted on: a group notification has no number to attribute, and
+    "acha" in a group of 700 is not an unsubscribe.
 - **Delivery is verified, not assumed.** `WaSender` treats a message as sent
   only when the compose box clears afterwards. Without that check a campaign
   against a restricted account would report a clean 100%.
@@ -161,17 +211,7 @@ All answered as of the architecture doc's writing (2026-07-29):
 Nothing outstanding from the client as of Phase 0. If a later phase surfaces
 a new open question, add it here with the date it came up.
 
-Raised by Phase 5 (2026-07-29), **blocking for the feature the client asked for**:
-- **Nothing reads incoming WhatsApp replies.** `OptOutDetector` and
-  `CampaignRepository.applyOptOut` are built and tested, but no component
-  observes messages arriving, so automatic STOP/ACHA/SITAKI handling is
-  automatic in everything except the noticing. It needs a
-  `NotificationListenerService` (another scary permission, another walkthrough
-  step) or reading the chat list via the Accessibility service. Until then
-  opt-outs only happen when marked by hand, and the `ColdBatchNoReplies`
-  circuit breaker can never fire because reply counts are always zero. **This
-  is a real gap against architecture doc section 6 layer 3 — decide the
-  approach before Phase 6.**
+Raised by Phase 5 (2026-07-29), **still open**:
 - **Attachments are not implemented.** The client asked for images, video,
   audio and documents, optionally captioned (section 10 Q6). The `wa.me` deep
   link can only carry text, so attachments need a different send path

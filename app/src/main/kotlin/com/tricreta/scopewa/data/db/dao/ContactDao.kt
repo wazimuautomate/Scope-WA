@@ -123,11 +123,20 @@ interface ContactDao {
     @Query("UPDATE contacts SET last_messaged_at = :at, updated_at = :at WHERE id = :id")
     suspend fun markMessaged(id: Long, at: Long)
 
-    /** A reply arrived — the strongest positive signal there is (section 6 layer 3). */
+    /**
+     * A reply arrived — the strongest positive signal there is (section 6 layer
+     * 3). Keyed by number rather than id because the reply listener resolves a
+     * notification to a number, and because the suppression list this feeds is
+     * number-keyed too.
+     *
+     * Stores when and how many, never what: reply text is not persisted.
+     */
     @Query(
         """
         UPDATE contacts
-        SET times_replied = times_replied + 1, updated_at = :at
+        SET times_replied = times_replied + 1,
+            last_replied_at = :at,
+            updated_at = :at
         WHERE phone_e164 = :number
         """
     )

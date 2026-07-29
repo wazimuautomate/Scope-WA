@@ -60,7 +60,10 @@ import com.tricreta.scopewa.data.db.entity.TemplateEntity
         GroupAddJobEntity::class,     // Phase 7
         SettingEntity::class          // Phase 1 (Settings screen)
     ],
-    version = 1,
+    // 2 — Phase 5 follow-up added campaign_messages.replied_at / reply_count and
+    //     contacts.last_replied_at for the reply listener. Destructive fallback
+    //     handles it; nothing has shipped, so there is no user data to migrate.
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
