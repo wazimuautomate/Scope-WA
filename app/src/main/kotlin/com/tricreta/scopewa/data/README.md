@@ -1,34 +1,47 @@
 # data/
 
-Room database package. Everything is local to the phone; nothing is uploaded
-anywhere (architecture doc section 5.3).
+Room database and repositories. Everything stays on the phone — architecture
+doc section 5.3.
 
 ## Layout
 
-- `db/entity/` — one file per table. `TemplateEntity` is real (Phase 3);
-  `Shells.kt` holds placeholder entities for the other seven tables.
-- `db/dao/` — one DAO per entity that has one. Only `TemplateDao` exists so far.
-- `db/ScopeWaDatabase.kt` — the `RoomDatabase` subclass and its singleton.
-- `repository/` — one repository per feature area. UI and job-runner code talk
-  to repositories, never to DAOs.
+- `db/entity/` — one file per table. All eight tables from architecture doc
+  section 5.3 are registered, plus two the design needs but the prose summary
+  doesn't name:
+  - `contact_list_members` — the many-to-many join between contacts and lists.
+  - `suppression_list` — number-level blocks that survive a contact row being
+    deleted and re-imported, which is exactly when a resurrected STOP reply
+    would do real damage.
+- `db/dao/` — `ContactDao`, `ContactListDao`, `SuppressionDao`. Later phases add
+  their own DAO next to these.
+- `db/ScopeWaDatabase.kt` — the `RoomDatabase`. **Add fields and DAOs, not new
+  `entities = [...]` entries** (see `docs/BUILD-PLAN.md`, shared hotspots).
+- `db/Converters.kt` + `db/StringCodec.kt` — `List<String>` and
+  `Map<String, String>` columns. The encoding lives in `StringCodec` so it is
+  unit tested without Room.
+- `repository/contacts/` — the Contacts feature. Everything that decides *what
+  the data means* is pure Kotlin with no Android imports, so CI tests it
+  without a phone:
+  - `parse/` — `CsvParser`, `VcfParser`, `TxtParser`, `ContactFileParser`,
+    ported from the proven Chrome extensions in `docs/reference/`.
+  - `ContactImporter` — normalise via `brain/phone/PhoneNormalizer`, dedupe,
+    then split rows into new / already-known / suppressed / unusable.
+  - `ContactExporter` — CSV, TXT, VCF and JSON **file** content.
+  - `ContactsRepository` — the only thing the UI and job runner talk to.
 
-## Why all eight tables are declared already
+## Two rules worth repeating
 
-`docs/BUILD-PLAN.md` ("Shared hotspots") makes `ScopeWaDatabase.kt` a
-coordination point: if each phase added its own `@Database(entities = [...])`
-entry, every parallel phase branch would conflict on one line. The rule there is
-that whichever phase lands the database first scaffolds all eight tables from
-architecture doc section 5.3, and later phases only add **columns and DAOs to
-their own entity**.
+1. **Export produces files, never phonebook entries.** Per the client's answer
+   in architecture doc section 10 Q8, nothing here may be routed into Android's
+   contacts provider — including the VCF exporter, tempting as it looks.
+2. **Suppressed numbers are dropped on import, not imported and flagged.**
+   That's what makes a STOP reply stick across a delete-and-reimport.
 
-Phase 3 landed first — before Phase 2, which the build plan expected to get here
-— so the shells in `db/entity/Shells.kt` are Phase 3's stand-ins for other
-phases' tables. Filling one in is an additive change to that entity file; it does
-not require touching `ScopeWaDatabase.kt`.
+## Schema versioning
 
-## Migrations
-
-The database is still built with `fallbackToDestructiveMigration()`. That is
-deliberate while the shells are being filled in and there is no real client data
-on any device, and it **must be replaced with real migrations before the first
-APK ships to the client**.
+`exportSchema = false` with destructive fallback is deliberate *while
+unreleased* — nothing has shipped, so there's no user data to migrate and a
+committed schema would only record guesses that later phases will change.
+Before the first signed release: turn schema export on, add the
+`room.schemaLocation` KSP arg, commit the schema, and drop the destructive
+fallback. Tracked in `MEMORY.md`.

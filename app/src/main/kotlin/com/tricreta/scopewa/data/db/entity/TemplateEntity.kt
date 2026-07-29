@@ -5,42 +5,40 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 /**
- * A saved message template — the `templates` table in architecture doc section 5.3.
- * Owned by Phase 3.
+ * `templates` — architecture doc section 5.3: "message body with variables +
+ * spintax". Owned by Phase 3; this is Phase 2's scaffold filled in.
  *
  * [knownVariables] is the list of CSV column names the author expects this
- * template to be rendered against. It is not decoration: `TemplateEngine`
- * decides whether `{name|there}` is "variable with a fallback" or spintax by
- * looking the first segment up in this set, so it has to travel with the
- * template body all the way to the sender in Phase 5.
+ * template to be rendered against, and it is not decoration.
+ * `brain/template/TemplateEngine` decides whether `{name|there}` means "the CSV
+ * value, or *there* if it's blank" or spintax ("pick one of these two words at
+ * random") by looking the first segment up in this set — so it has to travel
+ * with the body all the way to the sender in Phase 5, or a template will send
+ * differently than it previewed.
+ *
+ * Stored via Phase 2's `Converters`.
  */
 @Entity(tableName = "templates")
 data class TemplateEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = NEW_TEMPLATE_ID,
 
-    val name: String,
+    val name: String = "",
 
-    val body: String,
+    /** The raw template text: `{name|there}` variables plus `{a|b|c}` spintax. */
+    val body: String = "",
 
-    /** Comma-separated CSV column names — see [encodeVariables]/[decodeVariables]. */
     @ColumnInfo(name = "known_variables")
-    val knownVariables: String = "",
+    val knownVariables: List<String> = emptyList(),
 
     @ColumnInfo(name = "created_at")
-    val createdAt: Long,
+    val createdAt: Long = 0,
 
     @ColumnInfo(name = "updated_at")
-    val updatedAt: Long
+    val updatedAt: Long = 0
 ) {
     companion object {
-        /** Room treats 0 on an autoGenerate key as "assign me one". */
+        /** Room reads 0 on an autoGenerate key as "assign me one". */
         const val NEW_TEMPLATE_ID = 0L
-
-        fun encodeVariables(names: List<String>): String =
-            names.map { it.trim() }.filter { it.isNotEmpty() }.distinct().joinToString(",")
-
-        fun decodeVariables(encoded: String): List<String> =
-            encoded.split(",").map { it.trim() }.filter { it.isNotEmpty() }
     }
 }

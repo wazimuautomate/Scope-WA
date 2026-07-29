@@ -22,29 +22,19 @@ dependencies.
 
 Still unstarted: Phases 5, 6, 7.
 
-### Phase 3 decisions Phase 2 and Phase 5 need to know
+### Phase 3 decisions Phase 5 needs to know
 
-- **Phase 3 landed the Room database, not Phase 2.** `docs/BUILD-PLAN.md`
-  recommended Phase 2 do it, but its rule is "whoever lands first scaffolds all
-  eight tables" — so `data/db/entity/Shells.kt` holds one-line placeholder
-  entities for the seven tables Phase 3 doesn't own. Filling one in is an
-  additive edit to that entity file; nobody needs to touch
-  `data/db/ScopeWaDatabase.kt`'s `@Database(entities = [...])` list again.
-- **`fallbackToDestructiveMigration()` is deliberate and temporary.** Fine while
-  shells are being filled in and no client data exists on any device; it must
-  become real migrations before the first APK ships.
 - **`TemplateEntity.knownVariables` is load-bearing, not metadata.**
   `TemplateEngine` decides `{name|there}` means "CSV value, or *there* if blank"
   — rather than a coin flip between two words — by looking `name` up in that
   set. Phase 5 must pass the stored list to the engine at send time, or
   templates render differently than they previewed.
 - **The editor's uniqueness meter is a floor, not a prediction.** It holds CSV
-  values constant and measures spintax variation only, because there is no
-  contact list until Phase 2. Phase 5 must recompute it against the real
-  rendered campaign before sending — that is the number section 6 describes.
-- **`ui/home/HomeScreen.kt` has a "Templates" button** next to Phase 1's Setup
-  and Diagnostics buttons. Templates need no Accessibility permission, so the
-  screen is reachable before setup is finished.
+  values constant and measures spintax variation only, because the editor has no
+  campaign in front of it. Phase 5 must recompute it against the real rendered
+  campaign before sending — that is the number section 6 actually describes.
+- **Templates is reached from Phase 2's bottom nav bar**, so Phase 3 added no
+  entry point of its own.
 
 **Phase 1 — code complete, NOT device-verified.** Accessibility service,
 node finding, selector capture tooling, the WhatsApp probe, and the guided
@@ -58,8 +48,23 @@ permission walkthrough are all built and CI-green (branch
 > treat Phase 1 as done, and do not start Phase 4, 5, or 7, until someone runs
 > the in-app test on a real handset.** See "What Phase 1 still needs" below.
 
-Phases 2 (Contacts) and 3 (Templates) are being built in parallel by other
-sessions and depend on none of this.
+**Phase 2 (Contacts) — done, merged into `features` (PR #3, 2026-07-29).** Room schema (all ten tables), CSV/VCF/TXT import with dedupe and
+a confirm-before-you-write preview, lists + bulk-select picker, CSV/TXT/VCF/JSON
+file export, and the `opted_out` + suppression plumbing Phase 5 needs for STOP
+handling. Verified by CI only — compile plus 104 unit tests. No device test was
+done and none is needed: Phase 2 touches no Accessibility code. The Compose
+screens are compile-checked but have not been clicked through on a handset.
+
+**Phase 3 (Templates)** was still in flight in another session on
+`phase-3-templates` when Phase 2 merged. Phase 2 blocks nothing any more, and
+`docs/BUILD-PLAN.md` wanted it to land first precisely so Phase 3 only has to
+add fields to `TemplateEntity` — **if Phase 3's branch carries a richer one,
+take theirs.**
+
+**Phase 4 (extractor) is unblocked on paper but not in practice:** it depends on
+Phase 1, and Phase 1's device verification above has not happened. Its
+`WaSelectors` view-ids are still researched guesses, so extraction built on them
+would be built on sand. Do the 10-minute handset test first.
 
 ## What Phase 1 still needs (a human with the phone, ~10 minutes)
 
@@ -89,6 +94,31 @@ sessions and depend on none of this.
   Accessibility + bulk messaging would be rejected outright.
 - **Extraction is export-only — never writes to the phone's contacts app.**
   Explicit client instruction (architecture doc section 10, Q8).
+- **Phase 2 scaffolded all ten Room tables at once** (the eight in architecture
+  doc section 5.3 plus `contact_list_members` and `suppression_list`), exactly
+  as `docs/BUILD-PLAN.md`'s shared-hotspots section asks. Later phases add
+  *fields and DAOs* to their own entity; nobody adds new `entities = [...]`
+  entries. `TemplateEntity` is a shell — **if Phase 3's branch defines a richer
+  one, take theirs at merge time**; only the `@Database` list has to stay
+  single-sourced.
+- **`suppression_list` is keyed by phone number, not contact id.** A STOP block
+  has to survive the contact being deleted and the same CSV re-imported, which
+  is precisely the case where a quietly resurrected opt-out does real damage.
+  `contacts.opted_out` and this table are kept in sync by `ContactsRepository`.
+- **Contacts keep a `custom_fields` map of the leftover CSV columns.** Section 6
+  layer 1 promises any CSV column can be a template variable; without this
+  Phase 5 would have nothing to substitute.
+- **Room schema export is off and migrations are destructive, deliberately, and
+  only until the first release.** Nothing has shipped, so there's no user data
+  to migrate and a committed schema would just record guesses later phases
+  change. **Before the first signed release:** turn `exportSchema` on, add the
+  `room.schemaLocation` KSP arg, commit the schema, drop
+  `fallbackToDestructiveMigration()`.
+- **Pure logic lives outside `brain/` when it belongs to a feature.** The
+  contact parsers/importer/exporter sit in `data/repository/contacts/` (Phase 2's
+  owned directory) but have zero Android imports, so CI still tests them without
+  a phone. `brain/` stays the cross-cutting anti-ban logic; the `brain/` rule in
+  `CLAUDE.md` is "no Android in brain", not "all pure code in brain".
 - **Build order is deliberate: extractor → sender → adder.** Risk increases
   in that order; each phase teaches the Accessibility techniques the next
   needs. Group adder (Phase 7) ships last on purpose.
@@ -119,6 +149,14 @@ All answered as of the architecture doc's writing (2026-07-29):
 Nothing outstanding from the client as of Phase 0. If a later phase surfaces
 a new open question, add it here with the date it came up.
 
+Raised by Phase 2 (2026-07-29), not blocking:
+- Q8 says extraction exports "as CSV files". Phase 2 also implements TXT, VCF
+  and JSON export because the reference extension had them and they're nearly
+  free. **XLSX is deliberately not implemented** — it needs a ZIP writer and
+  belongs with Phase 4, where the client actually asked for it. Worth
+  confirming with him that CSV is the format he'll really use before Phase 4
+  spends effort on the other four.
+
 ## Things learned while building (don't rediscover these)
 
 - **Android's regex engine is stricter than the JVM's.** `Regex("\{([^{}]*)}")`
@@ -128,9 +166,11 @@ a new open question, add it here with the date it came up.
   template screen opened on a device. **Escape both braces**, and treat "CI is
   green" as no evidence at all about regex literals. Nothing in the JVM test
   suite can catch this class of bug; only running the APK can.
-- **`Scaffold` does not inset a custom `bottomBar`.** With `enableEdgeToEdge()`
-  in `MainActivity`, a bottom bar needs `Modifier.navigationBarsPadding()` or it
-  renders underneath the system navigation bar.
+- **`Scaffold` does not inset a custom `bottomBar`.** With `enableEdgeToEdge()`,
+  a screen-level bottom bar renders underneath the system navigation bar unless
+  something insets it. Since Phase 2 added `MainActivity`'s outer `Scaffold` +
+  bottom nav, the outer one now handles it — so a nested screen must *not* add
+  `navigationBarsPadding()` as well, or it leaves a dead gap.
 
 - **Android 13+ blocks Accessibility for sideloaded apps.** The toggle appears
   but is greyed out until the user does App info → ⋮ → *Allow restricted
@@ -149,6 +189,13 @@ a new open question, add it here with the date it came up.
   word. `WaDeepLink` converts to `%20`; there's a test pinning it.
 - **CI didn't run on phase branches** until Phase 1 fixed `ci.yml`. If a
   branch seems to have no checks, that's the shape of the bug to look for.
+- **Android's own contact export writes quoted-printable.** Any name with an
+  accent or non-Latin character comes out as
+  `N;CHARSET=UTF-8;ENCODING=QUOTED-PRINTABLE:...`. `VcfParser` decodes it; a
+  parser that doesn't will import visible mojibake, not an obvious crash.
+- **Room 2.6's `fallbackToDestructiveMigration()` takes no arguments.** The
+  `dropAllTables = true` overload is 2.7+. Easy to write from memory and it
+  fails at compile time, which is at least fast.
 
 ## Known risks to keep front of mind
 
@@ -183,3 +230,12 @@ a new open question, add it here with the date it came up.
 - `gh` CLI has multiple accounts authenticated locally (`TricretA`,
   `wazimuautomate`, `Wazimu90`); active account must be `wazimuautomate` for
   this repo (`gh auth switch --hostname github.com --user wazimuautomate`).
+- **Parallel sessions share one checkout — use `git worktree`.** Two sessions
+  running in `C:\Users\ADMIN\OneDrive\Desktop\Scope WA` at once will fight over
+  the branch and each other's uncommitted files (this happened on 2026-07-29:
+  a `git checkout -b` moved the branch out from under another session's
+  in-progress edits). Phase 2 and Phase 3 each ran from
+  `git worktree add <dir> -b phase-N-<name> origin/features`. Do that.
+- `ci.yml` runs on **every** branch push and on PRs into `main`/`features`
+  (Phase 1 fixed this). Pushing a phase branch is enough to get a check;
+  `gh run list --branch <name>` finds it.

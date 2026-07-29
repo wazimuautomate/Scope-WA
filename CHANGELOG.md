@@ -37,13 +37,11 @@ merged PR, newest first within each release. Format loosely follows
   deliberately absent: they need Android APIs and `brain/` stays Android-free.
 - **`brain/uniqueness/UniquenessSummary.kt`** — the meter's wording as tested
   pure functions, since "warn loudly" is a requirement rather than styling.
-- **Room database** (`data/db/`) — `ScopeWaDatabase`, `TemplateEntity`,
-  `TemplateDao`, `TemplateRepository`. Per `docs/BUILD-PLAN.md`'s shared-hotspot
-  rule, the phase that lands the database first declares **all eight** tables
-  from architecture doc section 5.3; the other seven are one-line shells in
-  `data/db/entity/Shells.kt` for their owning phase to fill in without touching
-  `ScopeWaDatabase.kt`. Phase 3 got there before Phase 2, which the build plan
-  had expected to.
+- **Template persistence** — Phase 2's `TemplateEntity` scaffold filled in with
+  `knownVariables` (stored through Phase 2's `Converters`), plus `TemplateDao`,
+  `TemplateRepository`, and one `templateDao()` accessor on `ScopeWaDatabase`.
+  Exactly the additive shape `docs/BUILD-PLAN.md`'s shared-hotspot rule asks
+  for: no new `@Database(entities = [...])` entries.
 
 ### Fixed — a crash CI could not see
 
@@ -56,27 +54,18 @@ merged PR, newest first within each release. Format loosely follows
   since no JVM test can catch it. Found by installing the CI debug APK on an
   emulator.
 
-- The editor's Save bar sat underneath the system navigation bar. `MainActivity`
-  draws edge-to-edge and `Scaffold` does not inset a custom `bottomBar`.
-
 ### Changed
 
-- `ui/home/HomeScreen.kt` gained a "Templates" button alongside Phase 1's
-  Setup and Diagnostics buttons. Writing and previewing a template needs no
-  Accessibility permission, so it is reachable before setup is finished.
 - Added `androidx.compose.material:material-icons-core` explicitly rather than
   relying on it arriving transitively via material3.
 
 ### Notes
 
 - The uniqueness meter reports a **floor**. It holds CSV values constant and
-  measures spintax variation only, because the editor has no contact list yet
-  (that's Phase 2) and inventing per-recipient names would inflate the score
-  with variation the template doesn't actually provide. The UI says so on
-  screen. Phase 5 recomputes it against the real list before sending.
-- The database is still built with `fallbackToDestructiveMigration()` while the
-  shell entities are being filled in. That must become real migrations before
-  the first APK reaches the client.
+  measures spintax variation only, because the editor cannot know a real contact
+  list, and inventing per-recipient names would inflate the score with variation
+  the template doesn't actually provide. The UI says so on screen. Phase 5
+  recomputes it against the real list before sending.
 - **Verified on an emulator, not a phone.** The click-through (list → editor →
   chips → spintax → preview cycling → uniqueness warning → save → reopen) was
   done on an API 30 emulator using the CI debug APK. Templates touch no
@@ -117,7 +106,7 @@ merged PR, newest first within each release. Format loosely follows
 - **`WaDeepLink`** (in `brain/`) — pure `wa.me` URL builder, unit tested.
 - **HomeScreen** now shows live readiness instead of a static placeholder.
 
-### Fixed
+### Fixed — Phase 1
 
 - **CI never ran on phase branches.** `ci.yml` triggered only on pushes to
   `main`/`features` and PRs into `main`, but `CLAUDE.md` requires green CI
@@ -127,7 +116,7 @@ merged PR, newest first within each release. Format loosely follows
   This blocked Phases 2 and 3 equally.
 - CI keeps the HTML test report as an artifact when tests fail.
 
-### Known limitations
+### Known limitations — Phase 1
 
 - **The WhatsApp view-ids in `WaSelectors` are researched candidates, not
   device-verified.** They have not been confirmed against the client's handsets
@@ -135,6 +124,51 @@ merged PR, newest first within each release. Format loosely follows
   degrades to the next candidate, and the Diagnostics screen exists to capture
   the real values — but until someone runs the probe on a real phone, Phase 1's
   acceptance criterion is not met. See `MEMORY.md`.
+
+### Added — Phase 2: Contacts
+
+- **Room schema.** All eight tables from architecture doc section 5.3 are
+  registered in `ScopeWaDatabase` in one go, as `docs/BUILD-PLAN.md` asks, so
+  later phases add fields and DAOs rather than new `@Database` entries.
+  `contacts`, `contact_lists`, `suppression_list` and the `contact_list_members`
+  join are fully built and used; `templates`, `campaigns`, `campaign_messages`,
+  `group_add_jobs`, `extractions` and `settings` are documented scaffolds owned
+  by the phase named in each entity's KDoc.
+  - Two tables the section 5.3 prose doesn't name were needed: the
+    contacts↔lists join, and `suppression_list`. The latter is keyed by number
+    rather than contact id so a STOP block survives a contact being deleted and
+    the same CSV re-imported.
+  - `contacts.custom_fields` keeps the leftover CSV columns (`town`,
+    `last_bundle`, …). Without it the CSV-variable half of section 6 layer 1
+    would have nothing to substitute in Phase 5.
+- **CSV / VCF / TXT import**, ported to Kotlin from the proven Chrome
+  extensions in `docs/reference/` (`lib/parse.js`, `lib/csv.js`). All parsing is
+  pure Kotlin with no Android imports, so CI tests it without a phone.
+  - CSV: RFC-4180-ish — quoted fields, embedded commas and newlines, escaped
+    quotes, CRLF/LF/CR, BOM. Duplicate and blank headers are renamed rather than
+    silently swallowing a column.
+  - VCF: adds quoted-printable decoding (what Android's own contact export
+    produces for any accented name), every `TEL` line rather than only the
+    first, and Apple-style `item1.TEL` grouping.
+  - TXT: `number`, `number,name`, `name,number`, tab- and semicolon-separated.
+- **Dedupe and normalisation** through the existing Phase 0 `PhoneNormalizer`.
+  An import is planned before it is applied: the user sees new / already-known /
+  duplicate-in-file / blocked / unusable counts and confirms, instead of finding
+  out after 20,000 rows have landed.
+- **Lists, bulk-select picker and export** — the screens from reference
+  screenshots 02, 03 and 04. Export writes CSV, TXT, VCF or JSON **files** via
+  the Storage Access Framework; per the client's answer in section 10 Q8,
+  nothing is ever written to the phone's address book.
+- **`opted_out` flag and suppression list** (section 6 layer 3), ready for
+  Phase 5's STOP/ACHA/SITAKI handling. Suppressed numbers are dropped on import,
+  not imported and flagged.
+- A minimal bottom navigation bar, because the Phase 0 skeleton starts on Home
+  and Home had no links — the Contacts screens were otherwise unreachable.
+  Deliberately throwaway; Phase 1 should replace it when Home lands.
+
+### Changed — Phase 2
+
+- Added `androidx.lifecycle:lifecycle-viewmodel-compose` to the version catalog.
 
 ## [0.1.0] — 2026-07-29 — Phase 0: project skeleton
 

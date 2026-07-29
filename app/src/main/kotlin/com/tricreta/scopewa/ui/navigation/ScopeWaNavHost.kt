@@ -10,6 +10,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.tricreta.scopewa.data.db.entity.TemplateEntity
 import com.tricreta.scopewa.ui.common.ComingSoonScreen
+import com.tricreta.scopewa.ui.contacts.contactsGraph
 import com.tricreta.scopewa.ui.home.HomeScreen
 import com.tricreta.scopewa.ui.settings.DiagnosticsScreen
 import com.tricreta.scopewa.ui.settings.SetupScreen
@@ -38,9 +39,9 @@ fun ScopeWaNavHost(
         composable(ScopeWaDestination.Setup.route) { SetupScreen() }
         composable(ScopeWaDestination.Diagnostics.route) { DiagnosticsScreen() }
 
-        composable(ScopeWaDestination.Contacts.route) {
-            ComingSoonScreen("Contacts", "Lands in Phase 2 — see architecture doc section 9.")
-        }
+        // Phase 2 — lists, import, picker and export all live under `contacts/`.
+        contactsGraph(navController)
+
         composable(ScopeWaDestination.Extract.route) {
             ComingSoonScreen("Extract", "Lands in Phase 4 — see architecture doc section 9.")
         }
