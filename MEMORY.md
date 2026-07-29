@@ -31,6 +31,36 @@ screens are compile-checked but have not been clicked through on a handset.
 **Phase 3 (Templates)** was being built in parallel in another session on
 `phase-3-templates`. Phase 2 blocks nothing any more.
 
+**Phase 4 (Group extractor) — code complete, WhatsApp interaction NOT
+verified.** Member-row parsing, filters, cross-group dedupe, the scroll
+routine, persistence, export and the Extract screen are built and CI-green
+(branch `phase-4-extractor`). The screen, filter state and readiness guard
+**were verified on the emulator**; the WhatsApp side was not, and could not be.
+
+> ⚠️ **Phase 4 was built while Phase 1 was still unverified**, contrary to the
+> caution above. That was a deliberate call to keep parallel sessions moving,
+> and the risk is real and unchanged: Phase 4's group-info selectors sit on the
+> same unverified foundation. Both get confirmed in the same 10-minute device
+> session — Phase 1's probe first, then one real group extraction.
+
+### The constraint Phase 4 discovered (matters for client expectations)
+
+Accessibility can only read **rendered text**. WhatsApp shows a participant's
+**phone number only when that person is not already saved on the phone**;
+for saved contacts it renders the saved name instead. The Chrome extension in
+`docs/reference/` did not have this problem because it read WhatsApp Web's
+internal store, which carries a dialable number for every member.
+
+**Consequence: extracted numbers will be fewer than group members**, by however
+many members the client already has saved. For harvesting *unknown* numbers —
+the actual goal — this is the useful direction, but the client was quoted
+against a tool that got everyone, so it is worth saying out loud before he
+tests it. The UI states it up front and the counts are reported honestly rather
+than quietly dropping rows.
+
+A saved contact and a LID-hidden member look identical on screen, so the two
+are modelled as a single "number not shown" status instead of guessing.
+
 ## What Phase 1 still needs (a human with the phone, ~10 minutes)
 
 1. Install the debug APK from the CI run on a phone that has WhatsApp.
@@ -121,6 +151,25 @@ Raised by Phase 2 (2026-07-29), not blocking:
   belongs with Phase 4, where the client actually asked for it. Worth
   confirming with him that CSV is the format he'll really use before Phase 4
   spends effort on the other four.
+
+## Emulator (added 2026-07-29)
+
+There is a working AVD, `scope_test` (Android 11 / API 30), at
+`C:\Users\ADMIN\AppData\Local\Android\Sdk`. **`CLAUDE.md` has the full
+workflow and now requires every phase to run on it before its PR.** Three
+things that cost time to work out:
+
+- **There is no local JDK**, so nothing builds locally. The loop is: push →
+  let CI build → `gh run download` the debug APK → `adb install`.
+- **Always `adb uninstall` first.** Each session's CI build is signed with a
+  different debug keystore, so `install -r` fails with
+  `INSTALL_FAILED_UPDATE_INCOMPATIBLE` when another session installed last.
+- **The emulator is shared and RAM is very tight** (~0.6 GB free, so a second
+  AVD is not viable). Concurrent sessions polling with `uiautomator` and
+  force-stopping apps will reset your accessibility settings and kill your app
+  mid-test — which looks exactly like a bug in your code. Check
+  `adb logcat -d | Select-String uiautomator` before believing a surprising
+  result.
 
 ## Things learned while building (don't rediscover these)
 

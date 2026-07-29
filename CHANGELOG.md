@@ -6,6 +6,59 @@ merged PR, newest first within each release. Format loosely follows
 
 ## [Unreleased]
 
+### Added — Phase 4: group contact extractor
+
+- **`MemberRowParser`** — turns a rendered participant row into a member.
+  Deliberately strict about what becomes a phone number: an "about" text
+  reading *"call me on 0712345678"* must not be harvested as that member's
+  number, because the consequence is messaging the wrong person.
+- **`ExtractionFilter`** — exclude admins / already-saved / unreadable / self,
+  reporting **per-reason drop counts**. "824 read → 310 kept" is alarming
+  unexplained and unremarkable once it reads "310 kept, 400 numbers not shown,
+  114 already saved".
+- **`ExtractionMerger`** — dedupes across groups by number, tracking every
+  group a person appeared in. Members without a readable number are never
+  merged on name: two people both rendering as "John" are not the same person,
+  and collapsing them would silently delete someone.
+- **`GroupExtractor`** — scrolls the virtualised participant `RecyclerView`,
+  stopping after repeated barren passes, and records WhatsApp's own
+  "N participants" figure so an early-stopped scroll is detectable rather than
+  presenting as a complete extraction.
+- **`ExtractionRepository`** — saves through Phase 2's import path, so
+  extraction inherits phone normalisation, dedupe and, critically,
+  **suppression-list enforcement**: someone who replied STOP must not re-enter
+  the database because a group they're in got extracted.
+- **`ExtractionDao`** and extraction history; `ExtractionEntity` filled in with
+  reported-vs-read counts.
+- **Extract screen** (`ui/extract/`) with delayed capture, live progress,
+  filters, honest result counts, and a bottom-bar entry.
+- Export reuses Phase 2's `ContactExporter` — including its `hidden` handling —
+  so extraction and contact exports are byte-identical in format and both
+  produce **files only, never phonebook entries**.
+
+### Changed — Phase 4
+
+- `ContactsRepository.applyImport` takes an optional `sourceGroup`, populating
+  the `ContactEntity.sourceGroup` column Phase 2 scaffolded for this phase.
+- `ContactsRepository.knownNumbers()` added for the "skip people I already
+  have" filter.
+- `CLAUDE.md` documents the emulator workflow and now **requires every phase to
+  be run on the emulator before its PR**, with screenshots.
+
+### Known limitations — Phase 4
+
+- **Accessibility can only read rendered text, so numbers are recoverable only
+  for members not already saved on the phone.** The Chrome extension in
+  `docs/reference/` reads WhatsApp Web's internal store and gets a number for
+  everyone; the Android app has no equivalent. Extracted count will therefore
+  be lower than member count. Documented in `MemberNumberStatus`, surfaced in
+  the UI, and counted honestly rather than hidden.
+- A saved contact and a LID-hidden member are **indistinguishable** from a
+  rendered row, so the two are modelled as one status (`NotShown`).
+- The group-info selectors are researched candidates like Phase 1's, and **no
+  WhatsApp interaction has been verified on a device** — the emulator has no
+  WhatsApp and cannot realistically have one.
+
 ### Added — Phase 1: Accessibility Service + permission walkthrough
 
 - **`WaSelectors` rewritten as ordered fallback candidates** for both
