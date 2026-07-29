@@ -38,6 +38,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tricreta.scopewa.accessibility.AccessibilityPermission
+import com.tricreta.scopewa.accessibility.NotificationPermission
 import com.tricreta.scopewa.accessibility.WaPackage
 import com.tricreta.scopewa.ui.theme.ScopeAmber
 import com.tricreta.scopewa.ui.theme.ScopeGreen
@@ -169,6 +170,47 @@ fun SetupScreen(
 
         StepCard(
             number = if (state.mayNeedRestrictedUnlock) 4 else 3,
+            title = "Let Scope WA see STOP replies",
+            isDone = state.notificationAccessGranted,
+            isOptional = true
+        ) {
+            Text(
+                "Your messages promise \"Reply STOP to never receive this\". Scope WA can only " +
+                    "keep that promise if it sees the reply arrive — and WhatsApp is closed " +
+                    "while a campaign runs, so the only way to notice is by reading WhatsApp's " +
+                    "notifications.",
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Android grants notification access for the whole phone; it has no way to " +
+                    "limit it to one app. Scope WA throws away everything that isn't from " +
+                    "WhatsApp before it looks at it, and no message text is ever saved, sent " +
+                    "anywhere, or written to a log — only who replied, and when.",
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Campaigns run fine without this. What you lose is the automatic part: " +
+                    "you'd have to mark opt-outs by hand, and the safety check that pauses a " +
+                    "campaign nobody is answering stays switched off.",
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Spacer(Modifier.height(8.dp))
+            StatusLine(
+                label = "Allowed to read notifications",
+                isOk = state.notificationAccessGranted
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = { NotificationPermission.openNotificationAccessSettings(context) }
+            ) {
+                Text("Open notification access")
+            }
+        }
+
+        StepCard(
+            number = if (state.mayNeedRestrictedUnlock) 5 else 4,
             title = "Stop Android from pausing campaigns",
             isDone = false,
             isOptional = true
@@ -193,7 +235,7 @@ fun SetupScreen(
         }
 
         StepCard(
-            number = if (state.mayNeedRestrictedUnlock) 5 else 4,
+            number = if (state.mayNeedRestrictedUnlock) 6 else 5,
             title = "Test it",
             isDone = (state.probeState as? ProbeState.Finished)?.presentation?.isSuccess == true
         ) {

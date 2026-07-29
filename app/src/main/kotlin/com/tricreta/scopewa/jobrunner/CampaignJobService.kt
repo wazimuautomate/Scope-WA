@@ -15,6 +15,7 @@ import androidx.core.app.NotificationManagerCompat
 import com.tricreta.scopewa.MainActivity
 import com.tricreta.scopewa.R
 import com.tricreta.scopewa.ScopeWaApplication
+import com.tricreta.scopewa.accessibility.NotificationPermission
 import com.tricreta.scopewa.accessibility.SendOutcome
 import com.tricreta.scopewa.accessibility.WaPackage
 import com.tricreta.scopewa.accessibility.WaSender
@@ -137,7 +138,8 @@ class CampaignJobService : Service() {
         if (!awaitScheduledStart(campaign)) return
         repository.start(campaignId)
 
-        val planner = PacingPlanner(PacingProfileCatalog.byName(campaign.pacingProfile))
+        val profile = PacingProfileCatalog.byName(campaign.pacingProfile)
+        val planner = PacingPlanner(profile)
         val engine = CampaignEngine(planner)
         val target = WaPackage.entries.firstOrNull { it.name == campaign.waPackage } ?: WaPackage.Consumer
 
@@ -146,11 +148,23 @@ class CampaignJobService : Service() {
         var restrictionSeen = false
         var running = true
 
+        // A "batch" for the cold-batch breaker is the same run of messages the
+        // pacing profile takes a long break after — so `sentSinceLastLongPause`
+        // is also the batch counter, and the long pause is the batch boundary.
+        // Replies are counted by time rather than by row so the window matches
+        // exactly the messages in this batch.
+        var batchStartedAt = System.currentTimeMillis()
+
         while (running && scope.isActive) {
             // Re-read every iteration: the user may have paused or stopped from
             // the Running screen while we were asleep between messages.
             val current = repository.campaign(campaignId)
             if (current == null || CampaignStatus.fromName(current.status) != CampaignStatus.Running) break
+
+            // Re-read rather than cached: the user can revoke notification
+            // access mid-campaign, and the breaker must go back to being
+            // disabled the moment they do rather than pausing the run.
+            val replyTracking = NotificationPermission.isGranted(applicationContext)
 
             val state = EngineState(
                 pendingCount = repository.pendingCount(campaignId),
@@ -161,7 +175,12 @@ class CampaignJobService : Service() {
                 dailyCap = repository.dailyCap(),
                 currentHour = currentHour(),
                 activeHoursStart = current.activeHoursStart,
-                activeHoursEnd = current.activeHoursEnd
+                activeHoursEnd = current.activeHoursEnd,
+                repliesInCurrentBatch =
+                    if (replyTracking) repository.repliesSince(campaignId, batchStartedAt) else 0,
+                sentInCurrentBatch = sentSinceLastLongPause,
+                batchSizeForReplyCheck = profile.pauseEveryMessages,
+                replyTrackingAvailable = replyTracking
             )
 
             when (val step = engine.nextStep(state)) {
@@ -182,7 +201,11 @@ class CampaignJobService : Service() {
                 }
 
                 is CampaignStep.LongPause -> {
+                    // Reaching a long pause means the batch completed *without*
+                    // the cold-batch breaker firing — safety is evaluated first
+                    // — so this is exactly where the next batch begins.
                     sentSinceLastLongPause = 0
+                    batchStartedAt = System.currentTimeMillis()
                     countDown(campaignId, RunPhase.LongPause, step.seconds, null)
                 }
 

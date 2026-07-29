@@ -6,6 +6,67 @@ merged PR, newest first within each release. Format loosely follows
 
 ## [Unreleased]
 
+### Added — Phase 5 follow-up: reply reading (closes the opt-out gap)
+
+`MEMORY.md` carried this as the one open item marked *blocking for the feature
+the client asked for*: `OptOutDetector` and `CampaignRepository.applyOptOut`
+were built and tested, but nothing in the app **observed** a reply arriving, so
+automatic STOP/ACHA/SITAKI handling was automatic in everything except the
+noticing — and `ColdBatchNoReplies` could never fire, because the reply count
+was zero by construction.
+
+- **`accessibility/WaNotificationListener`** — a `NotificationListenerService`.
+  Chosen over reading the chat list through the Accessibility service because
+  the Accessibility service can only read a screen that is *on screen*, and a
+  campaign runs for hours on a phone nobody is touching (architecture doc
+  section 10, Q4). The alternative would have meant driving WhatsApp to the
+  foreground every few minutes — visible, ban-flavoured behaviour that fights
+  the pacing layer — or missing every reply, which is all of them.
+- **The service is deliberately almost empty.** It lifts fields off a
+  `Notification` and hands them to pure code; nothing that could be wrong is
+  decided in a class CI cannot test.
+- **`brain/reply/`, all pure Kotlin and unit tested without a phone:**
+  - `ReplyNotificationParser` — every fiddly heuristic in one testable place.
+    Rejects non-WhatsApp packages, WhatsApp's own "3 new messages from 2 chats"
+    roll-up (with and without `FLAG_GROUP_SUMMARY`, since some OEM builds omit
+    it), the "Checking for new messages" foreground notice, silent and ongoing
+    notifications, typing indicators and call notices. Splits a
+    `Group name: Sender` title, strips the `Sender:` prefix off group message
+    text, drops WhatsApp's `~` marker on unsaved participants, and recognises
+    when a title is an unsaved contact's raw number. Returns null rather than
+    guessing. No regex anywhere — Android's ICU engine is stricter than the
+    JVM's and CI cannot catch the difference.
+  - `ReplyRouter` — decides opt-out / record-reply / ignore. Calls
+    `OptOutDetector` for the keyword decision rather than duplicating its
+    keyword list, and refuses to attribute group messages, ambiguous names, or
+    senders no campaign has messaged. Marking the wrong person opted out is
+    permanent and silent; ignoring costs a reply count and leaves the existing
+    hand-marking path.
+- **`accessibility/NotificationPermission`** — mirrors `AccessibilityPermission`
+  exactly: a grant check via `NotificationManagerCompat.getEnabledListenerPackages`
+  and an intent to notification-access settings with the same OEM fallback.
+- **Replies are persisted** — `campaign_messages.replied_at` / `reply_count`
+  and `contacts.last_replied_at`, alongside the `times_replied` counter that
+  already fed the replied-first recipient ordering. A reply is recorded against
+  the *most recent* message sent to that number, so one answer doesn't light up
+  months of history. Room schema version 2; destructive fallback covers it,
+  nothing has shipped.
+- **`ColdBatchNoReplies` is switched back on, gated.** `CampaignEngine` now
+  enables the rule only when a batch has genuinely been counted **and**
+  notification access is granted, re-read every loop so revoking it mid-campaign
+  disables the rule rather than pausing the run. `CircuitBreaker` itself is
+  untouched — it is a Phase 0 rule other phases depend on. Covered both ways in
+  `CampaignEngineTest`.
+- **A setup step for it**, in the same tone as the Accessibility step: what it
+  reads, that Android has no way to scope notification access to one app and
+  what the app does about that in code, that no message text is ever stored,
+  logged or exported — and that campaigns run fine without it, you just mark
+  opt-outs by hand.
+
+Not device-tested. The notification parsing heuristics in particular are
+WhatsApp's wording as documented and observed by others, not captured from the
+client's handsets.
+
 ### Added — Phase 5: Bulk sender
 
 - **Campaign composer** (`ui/campaign/`) — list + template + pacing profile +
