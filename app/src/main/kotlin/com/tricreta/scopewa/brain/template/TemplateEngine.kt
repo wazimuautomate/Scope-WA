@@ -22,7 +22,10 @@ package com.tricreta.scopewa.brain.template
  */
 class TemplateEngine(private val random: () -> Double = Math::random) {
 
-    private val blockPattern = Regex("\\{([^{}]*)}")
+    // Both braces must stay escaped. A bare `}` compiles fine on the JVM — so
+    // CI's unit tests pass — but Android's ICU-backed regex engine rejects it
+    // with PatternSyntaxException the moment this class is touched on a phone.
+    private val blockPattern = Regex("\\{([^{}]*)\\}")
 
     fun render(
         template: String,

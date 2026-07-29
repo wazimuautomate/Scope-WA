@@ -86,6 +86,155 @@ merged PR, newest first within each release. Format loosely follows
   buttons) doesn't touch anything the first Phase 4 pass already confirmed
   renders correctly, but the export button itself has not been clicked on a
   device.
+### Added — Phase 5: Bulk sender
+
+- **Campaign composer** (`ui/campaign/`) — list + template + pacing profile +
+  WhatsApp target + schedule + preview + Start, per reference screenshots 08
+  and 09. Recurrence is deliberately absent: screenshot 10 is marked SKIP
+  because recurring blasts are a fast ban.
+- **The preview is the point.** Before anything is written it shows how many
+  will be messaged, how many are skipped and why, the uniqueness meter over the
+  *actual* rendered messages, the warm-up day and today's cap, and — when the
+  queue is bigger than the cap allows — plainly says how many people will not
+  be reached today.
+- **Live progress screen** (`ui/running/`) — sent/failed/skipped/pending, the
+  person currently being messaged, a ticking next-in countdown, and Pause /
+  Resume / Stop. Each auto-pause reason is translated into what happened and
+  what to do about it.
+- **Real foreground service** (`jobrunner/CampaignJobService`) replacing the
+  Phase 0 stub: a coroutine loop that asks `CircuitBreaker` before *every*
+  send, takes randomised `PacingPlanner` delays and long breaks, re-checks the
+  suppression list per recipient, holds a wake lock, and writes progress to
+  Room as it goes so a kill costs at most the message in flight.
+- **Send routine** (`accessibility/WaSender`) — opens the documented `wa.me`
+  deep link with the text prefilled, waits for the compose box, inserts a
+  length-proportional typing pause, clicks send, then **verifies the compose
+  box cleared** rather than assuming delivery. Watches for WhatsApp's
+  restriction wording throughout, which is the one outcome that stops the whole
+  campaign instead of counting as a failure.
+- **New pure-Kotlin brain pieces** (`brain/campaign/`), all unit tested in CI
+  without a phone:
+  - `RecipientOrdering` — replied-before first, then saved contacts, then
+    strangers; drops opt-outs, suppressed numbers, per-person cooldown and
+    in-list duplicates. Ordering means a campaign cut short by a cap or a
+    breaker has sent its *safest* messages, not a random slice.
+  - `CampaignEngine` — one `nextStep` decision combining pacing and the five
+    circuit breakers, with safety evaluated before pacing.
+  - `OptOutDetector` — STOP / ACHA / SITAKI / unsubscribe / toa, whole-word,
+    with negation and "stop by" guards.
+  - `RecipientVariables` — the variable map per recipient, where contact
+    identity beats a stale CSV column of the same name.
+  - `TypingDelay`, `PacingProfileCatalog`.
+- **Room**: `campaigns` and `campaign_messages` filled in with real columns, a
+  `CampaignDao`, and a `CampaignRepository`. Messages are rendered when the
+  queue is built, so the uniqueness meter scores exactly what will be sent and
+  a campaign resumed after a reboot sends what the user previewed.
+- The daily cap and warm-up day are computed across **all** campaigns, because
+  the cap belongs to the phone number — three campaigns in one day share one
+  allowance.
+
+### Fixed — Phase 5
+
+- `CircuitBreaker`'s cold-batch rule (`sentInCurrentBatch >=
+  batchSizeForReplyCheck && repliesInCurrentBatch == 0`) is true for all-zeros,
+  so a campaign that hadn't opted into reply tracking would have auto-paused
+  with `ColdBatchNoReplies` before its first message. Worked around in
+  `CampaignEngine` by disabling the rule until a batch is actually being
+  counted, rather than changing a Phase 0 rule other phases depend on.
+
+### Known limitations — Phase 5
+
+- **Not device-tested.** `docs/BUILD-PLAN.md` requires a real-phone send test
+  for Phase 5; there is no Android SDK or handset in this environment, so this
+  is compile-and-unit-test only. It also inherits Phase 1's unverified
+  `WaSelectors` view-ids — if those are wrong, sending cannot work.
+- **Nothing reads incoming replies yet**, so automatic STOP handling is
+  automatic in everything except the noticing: `OptOutDetector` and
+  `CampaignRepository.applyOptOut` are built and tested, but no component
+  observes messages arriving. That needs a `NotificationListenerService`, which
+  this phase does not add. Two consequences: opt-outs are only applied when
+  marked by hand (Phase 2's Blocked tab), and the `ColdBatchNoReplies` breaker
+  can never fire because reply counts are always zero.
+- **No attachments.** The client asked for images/video/audio/documents
+  (architecture doc section 10 Q6). The `wa.me` deep link cannot carry them, so
+  they need a different send path and are not in this phase.
+
+### Added — Phase 3: Templates
+
+- **Templates screens** (`ui/templates/`) — the editor from architecture doc
+  section 7:
+  - Saved-template list with a per-template read-out of how many variables and
+    spintax blocks it has and how many different messages it can produce.
+  - Editor with tappable variable chips (screenshot 11's reference list, but
+    they insert at the caret instead of copying to the clipboard) and one-tap
+    spintax starters for greetings, lead-ins and sign-offs.
+  - **Live preview** cycling through 5 random renders, with a Shuffle button
+    and a count of how many of the five actually came out different. All five
+    use the same sample recipient on purpose, so anything that differs between
+    cards is variation the template itself produces.
+  - **Uniqueness meter** in the doc's exact wording —
+    `200 messages · 194 unique (97%) · 6 exact duplicates` — with the
+    ⚠ warning line, a 100/200/500/1000 campaign-size selector, and a
+    combinations count.
+  - An editable "columns in your CSV" list. This drives `TemplateEngine`'s
+    variable-vs-spintax decision, so `{name|there}` means "name, or *there* if
+    blank" rather than a coin flip between the two words.
+- **`brain/template/TemplateAnalyzer.kt`** — classifies `{...}` blocks the same
+  way `TemplateEngine` renders them, multiplies out spintax combinations
+  (capped at 1e9), generates seeded previews, and estimates campaign
+  uniqueness. Unit tested, including a test that fails if the analyzer and the
+  engine ever disagree about what a block means.
+- **`brain/template/TemplateVariables.kt`** — the variable catalogue behind the
+  chips, plus clock-derived values (`{date}`, `{day_of_week}`,
+  `{random_number}`, …). Screenshot 11's `{LOCATION_*}`/`{BATT}` are
+  deliberately absent: they need Android APIs and `brain/` stays Android-free.
+- **`brain/uniqueness/UniquenessSummary.kt`** — the meter's wording as tested
+  pure functions, since "warn loudly" is a requirement rather than styling.
+- **Room database** (`data/db/`) — `ScopeWaDatabase`, `TemplateEntity`,
+  `TemplateDao`, `TemplateRepository`. Per `docs/BUILD-PLAN.md`'s shared-hotspot
+  rule, the phase that lands the database first declares **all eight** tables
+  from architecture doc section 5.3; the other seven are one-line shells in
+  `data/db/entity/Shells.kt` for their owning phase to fill in without touching
+  `ScopeWaDatabase.kt`. Phase 3 got there before Phase 2, which the build plan
+  had expected to.
+
+### Fixed — a crash CI could not see
+
+- **`Regex("\{([^{}]*)}")` crashed on device.** The unescaped closing brace
+  compiles fine on the JVM, so every unit test passed and CI was green, but
+  Android's ICU-backed regex engine rejects it with `PatternSyntaxException`.
+  `TemplateEngine` (Phase 0) carried the identical pattern, so this was never a
+  Phase 3 bug — it would have taken out Phase 5's send routine the first time it
+  rendered a message on a phone. Fixed in both, with a comment at each site
+  since no JVM test can catch it. Found by installing the CI debug APK on an
+  emulator.
+
+- The editor's Save bar sat underneath the system navigation bar. `MainActivity`
+  draws edge-to-edge and `Scaffold` does not inset a custom `bottomBar`.
+
+### Changed
+
+- `ui/home/HomeScreen.kt` gained a "Templates" button alongside Phase 1's
+  Setup and Diagnostics buttons. Writing and previewing a template needs no
+  Accessibility permission, so it is reachable before setup is finished.
+- Added `androidx.compose.material:material-icons-core` explicitly rather than
+  relying on it arriving transitively via material3.
+
+### Notes
+
+- The uniqueness meter reports a **floor**. It holds CSV values constant and
+  measures spintax variation only, because the editor has no contact list yet
+  (that's Phase 2) and inventing per-recipient names would inflate the score
+  with variation the template doesn't actually provide. The UI says so on
+  screen. Phase 5 recomputes it against the real list before sending.
+- The database is still built with `fallbackToDestructiveMigration()` while the
+  shell entities are being filled in. That must become real migrations before
+  the first APK reaches the client.
+- **Verified on an emulator, not a phone.** The click-through (list → editor →
+  chips → spintax → preview cycling → uniqueness warning → save → reopen) was
+  done on an API 30 emulator using the CI debug APK. Templates touch no
+  Accessibility APIs, so an emulator is a fair test of this screen; Phase 1's
+  probe still needs a real handset.
 
 ### Added — Phase 1: Accessibility Service + permission walkthrough
 
