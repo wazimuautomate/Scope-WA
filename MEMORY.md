@@ -32,6 +32,12 @@ pole; start it first even though it doesn't block 2 or 3.
 - **Repo/branch structure:** `main` (releasable) ← `features` (integration)
   ← per-phase branches. Enforced in `CLAUDE.md`. Initial scaffold commit
   went directly to `main`, as a one-time exception before the policy applied.
+- **Repo lives at `wazimuautomate/Scope-WA`, public.** Moved same-day from
+  `TricretA/Scope-WA` (private) — `TricretA` is the owner's personal/website
+  projects account, `wazimuautomate` is where apps are stored. Public so CI
+  minutes aren't capped. Nothing sensitive belongs in this repo as a result —
+  no real client phone numbers, no signing keystores (already gitignored),
+  no API keys in plaintext.
 
 ## Open questions (from architecture doc section 10, some already answered by the client)
 
@@ -65,4 +71,6 @@ a new open question, add it here with the date it came up.
 - No local JDK/Gradle/Android SDK detected on this machine as of 2026-07-29
   — all builds currently go through GitHub Actions CI. If a future session
   finds local tooling installed, this note is stale; remove it.
-- `gh` CLI is authenticated as `TricretA` locally.
+- `gh` CLI has multiple accounts authenticated locally (`TricretA`,
+  `wazimuautomate`, `Wazimu90`); active account must be `wazimuautomate` for
+  this repo (`gh auth switch --hostname github.com --user wazimuautomate`).

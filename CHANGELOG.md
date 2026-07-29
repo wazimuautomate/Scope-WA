@@ -44,8 +44,11 @@ Initial scaffold, committed directly to `main` during project setup.
   dependency graph, so later phases can be worked in parallel by separate
   sessions.
 - `CLAUDE.md`, `MEMORY.md` — project governance and running state.
-- Private GitHub repository at `TricretA/Scope-WA`, with `main` and
-  `features` branches.
+- Public GitHub repository at `wazimuautomate/Scope-WA` (public so CI runs
+  without Actions minute limits), with `main` and `features` branches.
+  Originally created under `TricretA/Scope-WA` (private) and moved the same
+  day — `TricretA` is reserved for personal/website projects,
+  `wazimuautomate` is where apps live.
 
 ### Fixed
 - `TemplateEngine` decided variable-vs-spintax by whether the value map

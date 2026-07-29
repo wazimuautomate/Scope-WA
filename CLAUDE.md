@@ -3,7 +3,7 @@
 Instructions for any Claude Code session (or other AI assistant) working in
 this repository.
 
-**Repository:** https://github.com/TricretA/Scope-WA (private)
+**Repository:** https://github.com/wazimuautomate/Scope-WA (public — app repos live under `wazimuautomate`; `TricretA` is personal/website projects)
 
 ## What this project is
 
