@@ -121,6 +121,187 @@ object WaSelectors {
         contentDescriptions = listOf("Search")
     )
 
+    /** Localised admin badge wording, matched as a fallback. Best-effort. */
+    val ADMIN_LABEL_TEXTS = listOf("Group admin", "Admin", "Super admin")
+
+    /**
+     * The admin badge drawn on a participant row. Phase 4 also falls back to
+     * matching [ADMIN_LABEL_TEXTS] anywhere in the row, because on several
+     * layouts this badge carries no id of its own.
+     */
+    val ParticipantAdminBadge = Selector(
+        name = "participant admin badge",
+        viewIds = listOf("admin_indicator", "group_admin_indicator"),
+        texts = ADMIN_LABEL_TEXTS
+    )
+
+    /**
+     * The row that opens the full participant list — WhatsApp collapses long
+     * lists behind "View all" / "See all N". Matched by text because it carries
+     * no stable id of its own.
+     */
+    val ViewAllParticipants = Selector(
+        name = "view-all participants row",
+        viewIds = listOf("see_all_participants", "participants_search"),
+        texts = listOf("View all", "See all")
+    )
+
+    /**
+     * The group subject on the group-info screen. Used as the extraction's group
+     * name and to confirm the right group is open before reading any rows.
+     */
+    val GroupTitle = Selector(
+        name = "group title",
+        viewIds = listOf("conversation_contact_name", "group_name", "subject")
+    )
+
+    /**
+     * The "N participants" / "N members" header, parsed by
+     * [parseReportedMemberCount].
+     */
+    val ParticipantCountHeader = Selector(
+        name = "participant count header",
+        viewIds = listOf("participants_title", "group_participants_count"),
+        texts = listOf("participants", "members")
+    )
+
+    /**
+     * Pulls the member total out of a header like "824 participants" or
+     * "Participants (824)".
+     *
+     * Worth parsing: comparing this against the number of rows actually read is
+     * the only reliable way to notice that scrolling stopped early. A partial
+     * extraction that presents itself as complete is the worst outcome in this
+     * phase, because the user acts on it.
+     */
+    fun parseReportedMemberCount(headerText: String?): Int? {
+        if (headerText.isNullOrBlank()) return null
+        val lower = headerText.lowercase()
+        if (!lower.contains("participant") && !lower.contains("member")) return null
+        return Regex("""\d[\d,\s]*""").find(headerText)
+            ?.value
+            ?.filter { it.isDigit() }
+            ?.toIntOrNull()
+    }
+
+    // ---------------------------------------------------------------------
+    // Group adding — Phase 7. Appended, per docs/BUILD-PLAN.md's shared-hotspot
+    // rule ("append, don't restructure").
+    //
+    // ⚠️ **None of these has ever been seen on a real device.** They are
+    // researched candidates drawn from the ids WhatsApp has used publicly and
+    // that community automation projects rely on — the same standing as the
+    // Phase 1 selectors above, and no better. The group-add flow is six screens
+    // deep, so it has more chances to be wrong than the send path does. Capture
+    // the real ids with Diagnostics → Dump WhatsApp screen before trusting any
+    // of it, and expect to correct several.
+    // ---------------------------------------------------------------------
+
+    /** The magnifier on WhatsApp's chat list — the way into finding a group by name. */
+    val MainSearchButton = Selector(
+        name = "chat-list search button",
+        viewIds = listOf("menuitem_search", "search_button"),
+        contentDescriptions = listOf("Search")
+    )
+
+    /** The text field the group name gets typed into, on the chat list or the picker. */
+    val MainSearchField = Selector(
+        name = "chat-list search field",
+        viewIds = listOf("search_src_text", "search_input"),
+        className = "android.widget.EditText"
+    )
+
+    /** A row title in the chat list or a search result list. */
+    val ChatListRowTitle = Selector(
+        name = "chat-list row title",
+        viewIds = listOf("conversations_row_contact_name", "contact_name", "conversation_contact_name")
+    )
+
+    /**
+     * The "Add participants" entry on a group info screen. WhatsApp has shipped
+     * this both as a dedicated button and as the first row of the participant
+     * list, hence the spread of candidates.
+     */
+    val AddParticipantsButton = Selector(
+        name = "add participants button",
+        viewIds = listOf("add_participant_button", "add_participants", "menuitem_add_people", "add_people"),
+        contentDescriptions = listOf("Add participants", "Add members"),
+        texts = listOf("Add participants", "Add members", "Add participant")
+    )
+
+    /** A tappable row in the add-participants search results. */
+    val AddParticipantResultRow = Selector(
+        name = "add-participant result row",
+        viewIds = listOf("contactpicker_row_name", "name", "chat_able_contacts_row_name")
+    )
+
+    /** The tick / Next / OK that commits the selected people to the group. */
+    val AddParticipantConfirm = Selector(
+        name = "add-participant confirm button",
+        viewIds = listOf("ok_btn", "next_btn", "menuitem_confirm", "confirm", "fab"),
+        contentDescriptions = listOf("Next", "Done", "OK", "Add"),
+        texts = listOf("Add", "OK", "Next", "Done")
+    )
+
+    /**
+     * The "N participants" header on a group info screen. Read before and after
+     * an add so success can be *verified* rather than assumed — the same
+     * precedent as [WaSender] waiting for the compose box to clear.
+     */
+    val GroupParticipantCountHeader = Selector(
+        name = "group participant count header",
+        viewIds = listOf("participants_title", "group_participants_title", "participants_search_title")
+    )
+
+    /**
+     * The invite-link offer WhatsApp shows when someone's privacy settings block
+     * being added. Its presence is the strongest signal that this person belongs
+     * in the never-retried invite bucket.
+     */
+    val InviteViaLinkButton = Selector(
+        name = "invite via link button",
+        viewIds = listOf("invite_link_btn", "invite_via_link", "invite_button"),
+        texts = listOf("Invite to group via link", "Send invite link", "Invite via link")
+    )
+
+    /** The button that dismisses a WhatsApp dialog without acting on it. */
+    val DialogDismissButton = Selector(
+        name = "dialog dismiss button",
+        viewIds = listOf("cancel_btn", "ok_btn", "button1", "button2"),
+        texts = listOf("OK", "Cancel", "Not now", "Dismiss")
+    )
+
+    /**
+     * Pulls "12" out of "12 participants".
+     *
+     * Written with `\d+` rather than a `{1,5}` quantifier on purpose. Android's
+     * ICU-backed regex engine is stricter than the JVM's about braces and CI
+     * cannot catch the difference (`MEMORY.md`, "things learned while
+     * building"); a pattern with no braces in it at all cannot trip over that.
+     */
+    private val PARTICIPANT_COUNT = Regex("(\\d+)\\s*(participants?|members?)", RegexOption.IGNORE_CASE)
+
+    /**
+     * The participant count anywhere in [visibleText], or null when nothing on
+     * screen says one. Null means "don't know" and must never be read as zero —
+     * an add verified against a guessed count is not verified.
+     */
+    fun participantCountIn(visibleText: String?): Int? {
+        if (visibleText.isNullOrBlank()) return null
+        return PARTICIPANT_COUNT.find(visibleText)?.groupValues?.getOrNull(1)?.toIntOrNull()
+    }
+
+    /**
+     * Fragments meaning "this person is already in the group". Not an error and
+     * not a failure — it must not feed the two-consecutive-failure breaker.
+     */
+    val ALREADY_MEMBER_TEXT_FRAGMENTS = listOf(
+        "already in this group",
+        "already a participant",
+        "is already in",
+        "already added"
+    )
+
     // ---------------------------------------------------------------------
     // Restriction / warning dialogs — these feed the circuit breaker
     // (architecture doc section 6, layer 4). Text-based by necessity: WhatsApp
@@ -163,6 +344,53 @@ object WaSelectors {
         "can't be added",
         "invite",
         "privacy settings"
+    )
+
+    // ---------------------------------------------------------------------
+    // Notification wording — Phase 5's reply listener
+    // (accessibility/WaNotificationListener.kt, brain/reply/).
+    //
+    // These are strings WhatsApp puts in its *notifications* rather than on
+    // screen, but they belong here for the same reason everything else does:
+    // they are WhatsApp's wording, they change when WhatsApp changes, and a
+    // patch to them should touch one file. Localised and therefore best-effort
+    // — the structural checks in `ReplyNotificationParser` (group summary flag,
+    // ongoing flag, empty body) are what carry the load; these only catch the
+    // English-locale noise those flags miss.
+    // ---------------------------------------------------------------------
+
+    /**
+     * Titles WhatsApp uses on its own housekeeping notifications rather than on
+     * a conversation. A notification titled with the app's own name is never a
+     * message from a person.
+     */
+    val NOTIFICATION_APP_TITLES = listOf("whatsapp", "whatsapp business")
+
+    /**
+     * Bodies that are WhatsApp talking about itself, not somebody replying:
+     * the foreground-service notice, backup progress, call notifications and
+     * typing indicators. Matched as case-insensitive substrings.
+     */
+    val NOTIFICATION_NOISE_FRAGMENTS = listOf(
+        "checking for new messages",
+        "backing up",
+        "backup in progress",
+        "restoring media",
+        "restoring messages",
+        "tap for more info",
+        "tap to load",
+        "is typing",
+        "typing…",
+        "typing...",
+        "recording audio",
+        "missed voice call",
+        "missed video call",
+        "incoming voice call",
+        "incoming video call",
+        "ongoing call",
+        "whatsapp web is currently active",
+        "you have new messages",
+        "new messages from"
     )
 
     /**

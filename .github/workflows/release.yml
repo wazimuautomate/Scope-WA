@@ -63,6 +63,37 @@ jobs:
       - name: Assemble release APK
         run: gradle assembleRelease --stacktrace
 
+      # AGP names the artifact `app-release.apk`, but update.json advertises
+      # `scope-wa.apk` and that URL is baked into every client the moment 1.0.0
+      # ships — a shipped updater cannot be told to look somewhere else. So the
+      # file is renamed to match the promise rather than the other way round.
+      - name: Rename the APK to the name update.json advertises
+        run: |
+          SOURCE=$(find app/build/outputs/apk/release -name '*.apk' -print -quit)
+          if [ -z "$SOURCE" ]; then
+            echo "::error::assembleRelease produced no APK."
+            exit 1
+          fi
+          if [ "$SOURCE" != "app/build/outputs/apk/release/scope-wa.apk" ]; then
+            mv "$SOURCE" app/build/outputs/apk/release/scope-wa.apk
+          fi
+
+      # With the signing secrets absent the workflow builds unsigned and skips
+      # publishing, which is fine. What is not fine is a *misconfigured* keystore
+      # publishing an unsigned APK under a v1.0.0 tag: Android refuses to install
+      # it, and the tag cannot be reused. So when signing was supposed to happen,
+      # prove it did.
+      - name: Verify the release APK is signed
+        if: steps.signing.outputs.configured == 'true'
+        run: |
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
+          if [ -z "$APKSIGNER" ]; then
+            echo "::error::apksigner not found in $ANDROID_HOME/build-tools."
+            exit 1
+          fi
+          "$APKSIGNER" verify --verbose --print-certs \
+            app/build/outputs/apk/release/scope-wa.apk
+
       - name: Read app version
         id: version
         run: |
@@ -91,5 +122,5 @@ jobs:
           name: Scope WA v${{ steps.version.outputs.name }}
           body_path: CHANGELOG.md
           files: |
-            app/build/outputs/apk/release/*.apk
+            app/build/outputs/apk/release/scope-wa.apk
             update.json

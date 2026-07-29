@@ -85,6 +85,70 @@ class WaSelectorsTest {
     }
 
     @Test
+    fun `every selector the group-add path depends on has a locale-independent candidate`() {
+        // Phase 7. Same rule as the send path above, and it matters more here:
+        // the group-add flow is six screens deep, so a text-only match would
+        // break the whole run on a phone that isn't in English.
+        val critical = listOf(
+            WaSelectors.MainSearchButton,
+            WaSelectors.MainSearchField,
+            WaSelectors.ChatListRowTitle,
+            WaSelectors.AddParticipantsButton,
+            WaSelectors.AddParticipantSearch,
+            WaSelectors.AddParticipantResultRow,
+            WaSelectors.AddParticipantConfirm,
+            WaSelectors.GroupParticipantCountHeader
+        )
+        for (selector in critical) {
+            assertTrue(
+                "${selector.name} must have at least one view-id candidate",
+                selector.hasViewIdCandidates
+            )
+        }
+    }
+
+    @Test
+    fun `group-add view ids qualify against both whatsapp variants`() {
+        assertTrue(
+            WaSelectors.AddParticipantsButton
+                .qualifiedViewIds(WaSelectors.PACKAGE_WHATSAPP_BUSINESS)
+                .all { it.startsWith("com.whatsapp.w4b:id/") }
+        )
+    }
+
+    @Test
+    fun `the participant count is read out of the group info header`() {
+        assertEquals(12, WaSelectors.participantCountIn("Group info  12 participants"))
+        assertEquals(1, WaSelectors.participantCountIn("1 participant"))
+        assertEquals(704, WaSelectors.participantCountIn("704 members"))
+    }
+
+    @Test
+    fun `an unreadable participant count is null, never zero`() {
+        // Verification treats null as "no evidence". Zero would read as a real
+        // count and let an unverified add report as successful.
+        assertNull(WaSelectors.participantCountIn(null))
+        assertNull(WaSelectors.participantCountIn(""))
+        assertNull(WaSelectors.participantCountIn("Group info"))
+    }
+
+    @Test
+    fun `already-a-member wording is recognised so it is not counted as a failure`() {
+        assertNotNull(
+            WaSelectors.matchFragment(
+                "Asha is already in this group",
+                WaSelectors.ALREADY_MEMBER_TEXT_FRAGMENTS
+            )
+        )
+        assertNull(
+            WaSelectors.matchFragment(
+                "Adding Asha to the group",
+                WaSelectors.ALREADY_MEMBER_TEXT_FRAGMENTS
+            )
+        )
+    }
+
+    @Test
     fun `privacy-blocked wording is recognised so those people go to the invite bucket`() {
         // Architecture doc section 3.2: these must never be retried as failures.
         assertNotNull(

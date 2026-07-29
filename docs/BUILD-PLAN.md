@@ -43,11 +43,10 @@ three more unit-tested pure-Kotlin pieces to reuse rather than reimplement:
   clock-derived values
 - `brain/uniqueness/UniquenessSummary.kt` — the meter's exact wording
 
-**Phase 3 also landed the Room database**, ahead of Phase 2. Per the
-shared-hotspot rule below, all eight tables from architecture doc section 5.3
-are already declared in `data/db/ScopeWaDatabase.kt`; seven are one-line shells
-in `data/db/entity/Shells.kt`. **Phases 2, 4, 5, 6 and 7: fill in your own shell
-entity and add its DAO — do not add entries to `@Database(entities = [...])`.**
+Phase 3 filled in Phase 2's `TemplateEntity` scaffold and added `TemplateDao` +
+one `templateDao()` accessor — the additive shape the shared-hotspot rule below
+asks for. **Phases 4, 5, 6 and 7: do the same. Do not add entries to
+`@Database(entities = [...])`; your table is already registered.**
 
 **Phase 1 — code complete, awaiting device verification.** The accessibility
 service, node finding, selector capture tooling, WhatsApp probe, and permission
@@ -190,6 +189,19 @@ section 10 Q8: **never write to the phone's contacts app** — export only.
 unit tests for dedupe-across-groups and filter logic.
 
 **Reference:** architecture doc sections 3.2, 5.1, 10 (Q7/Q8).
+
+> **Status: code complete on `phase-4-extractor`; WhatsApp side unverified.**
+> Screen, filter state and readiness guard were verified on the emulator, which
+> has no WhatsApp — so the scroll/read routine has never run against a real
+> group. Reusable by Phase 7: `data/repository/extract/` (member parsing,
+> filters, cross-group dedupe — pure and unit tested),
+> `accessibility/GroupExtractor.kt`, and the group selectors appended to
+> `WaSelectors.kt`.
+>
+> **A constraint Phase 7 inherits:** accessibility reads only *rendered* text,
+> so a participant's number is readable **only when they are not already saved
+> on the phone**. Candidate lists built from extractions will cover fewer
+> people than a group's member count — see `MemberNumberStatus` and `MEMORY.md`.
 
 ---
 

@@ -19,6 +19,9 @@
 ## CI provisions Gradle directly, so it is intentionally not committed.
 gradle/wrapper/gradle-wrapper.jar
 
+## Room's exported schema (app/schemas/) is deliberately NOT ignored — migrations
+## are validated against the committed JSON. Do not add it here.
+
 ## Signing / secrets — never commit
 keystore.properties
 *.keystore

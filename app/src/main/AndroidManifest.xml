@@ -51,9 +51,29 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
+        <!-- Reply listener — architecture doc section 6 layer 3. Sees STOP/ACHA/SITAKI
+             replies arrive while WhatsApp is backgrounded, which the Accessibility
+             service cannot. Everything not from WhatsApp is discarded in
+             brain/reply/ReplyNotificationParser.kt before anything else happens. -->
+        <service
+            android:name=".accessibility.WaNotificationListener"
+            android:exported="false"
+            android:label="@string/notification_listener_label"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <!-- JOB RUNNER layer — foreground service driving a campaign step by step. -->
         <service
             android:name=".jobrunner.CampaignJobService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- Phase 7 — the same layer, running section 6 layer 5's stricter rules. -->
+        <service
+            android:name=".jobrunner.GroupAddJobService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 

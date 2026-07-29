@@ -50,12 +50,12 @@ class TemplateEditorViewModel(
             if (existing == null) {
                 current.copy(loading = false)
             } else {
-                val stored = TemplateEntity.decodeVariables(existing.knownVariables)
                 current.copy(
                     loading = false,
                     name = existing.name,
                     body = TextFieldValue(existing.body, TextRange(existing.body.length)),
-                    knownVariables = stored.ifEmpty { TemplateVariables.defaultKnownNames }
+                    knownVariables = existing.knownVariables
+                        .ifEmpty { TemplateVariables.defaultKnownNames }
                 )
             }
         }

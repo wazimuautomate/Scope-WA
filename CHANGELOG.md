@@ -6,6 +6,322 @@ merged PR, newest first within each release. Format loosely follows
 
 ## [Unreleased]
 
+### Changed — Integration for 1.0.0: Phases 3–7 + reply listener + release hardening
+
+Six approved branches merged into one tree. Each was green on its own; the
+entries below are the things that were only decidable once they sat together.
+
+- **Room lands on version 2, with schema export on and no destructive
+  fallback.** The two last branches disagreed in a way that a clean merge would
+  have hidden: pre-release hardening set `version = 1` / `exportSchema = true`
+  and deleted `fallbackToDestructiveMigration()`, while the reply listener set
+  `version = 2` / `exportSchema = false` and kept the fallback. Taking either
+  side wholesale ships a wipe or a crash. The end state is `version = 2`,
+  `exportSchema = true`, no fallback, and a hand-written
+  `data/db/migration/MIGRATION_1_2` registered with `.addMigrations(...)`.
+- **That migration is wider than the reply listener**, deliberately. The
+  committed `1.json` was exported by CI *before* Phases 4 and 7 merged, so it is
+  the only definition of "version 1" that exists — and it is missing
+  `extractions.reported_member_count` / `imported_count` and eighteen
+  `group_add_jobs` columns plus two indices as well as the three reply columns.
+  A migration covering only the reply columns would have passed review and then
+  thrown `IllegalStateException` on the first launch after update, because Room
+  validates the whole post-migration schema against the entity hash. `1.json`
+  stays committed alongside `2.json`; a migration you cannot test from its
+  starting schema is not a migration.
+- **The bottom bar is five items again, and nothing was dropped.** Phases 4, 6
+  and 7 each added a top-level screen and the bar had reached seven — past
+  Material's 3–5 for `NavigationBar` — while Phase 7's **Group Add had no entry
+  at all and nothing else linked to it**, so a finished screen was unreachable.
+  Home / Contacts / Templates / Campaign keep their tabs; Extract, Group Add,
+  Activity log, Setup & permissions and Diagnostics moved behind a **More** tab
+  (`ui/more/MoreScreen.kt`), which stays lit while you are on one of them.
+- `ScopeWaNavHost`, `ScopeWaDestinations`, `AndroidManifest.xml`, `CampaignDao`
+  and `ScopeWaDatabase` are the union of every branch: every route, every
+  service registration, every DAO accessor and every entity, each declared once.
+  The Phase 6 and Phase 7 `ComingSoonScreen` placeholders are gone now that both
+  screens exist.
+
+### Fixed — the release pipeline, before it ships rather than after
+
+- **`update.json` pointed at a filename that would never exist.**
+  `release.yml` advertised `.../releases/download/v<version>/scope-wa.apk` but
+  uploaded whatever AGP produced, i.e. `app-release.apk`, so the in-app
+  `UpdateChecker` would have 404'd on the very first update check. The workflow
+  now **renames the APK to `scope-wa.apk`** before uploading, rather than
+  correcting the URL — that URL is baked into every installed client the moment
+  1.0.0 goes out, and a shipped updater cannot be told to look somewhere else.
+- **Nothing verified the release APK was actually signed.** With the four
+  signing secrets absent the workflow builds unsigned and skips publishing,
+  which is intended; but a *misconfigured* keystore could still publish an
+  unsigned APK under a `v1.0.0` tag that Android refuses to install and that
+  cannot be re-tagged. `release.yml` now runs `apksigner verify` on the APK,
+  gated on `steps.signing.outputs.configured == 'true'`, and fails the job if
+  the signature is missing.
+
+### Changed — Phase 4 follow-up: capture every group member by default
+
+- `ExtractionFilters.excludeWithoutNumbers` now defaults to **false**. The
+  first cut of this screen dropped members WhatsApp doesn't show a number for
+  (saved contacts) by default, which contradicted the actual goal: a complete
+  record of who's in the group. They're now kept by default, as name-only
+  rows — turning the filter on is an opt-in choice to hide them, not the
+  starting behaviour. `exportMerged()`'s `includeUnreachable` default flipped
+  to match.
+- **What changed vs. what can't:** a member's display name can always be
+  filled in (falls back to their number, or now also to content-description
+  when a layout exposes the label that way) — that part is fixed. A phone
+  number for someone WhatsApp only shows a saved name for **cannot be
+  recovered**; `ContactEntity.phoneE164` is a required, unique column, so a
+  numberless "contact" has nothing to be identified or messaged by. That
+  distinction is now explicit in the screen copy instead of implied.
+- **Wired an actual export button.** The original screen's copy claimed
+  extraction results were "exported as files", but no UI action produced one —
+  a real gap. `FinishedCard` now has CSV/VCF/JSON export buttons using Phase
+  2's exact SAF file-picker pattern (`ContactFileIo`, `PendingExport`).
+
+### Added — Phase 4: group contact extractor
+
+- **`MemberRowParser`** — turns a rendered participant row into a member.
+  Deliberately strict about what becomes a phone number: an "about" text
+  reading *"call me on 0712345678"* must not be harvested as that member's
+  number, because the consequence is messaging the wrong person.
+- **`ExtractionFilter`** — exclude admins / already-saved / unreadable / self,
+  reporting **per-reason drop counts**. "824 read → 310 kept" is alarming
+  unexplained and unremarkable once it reads "310 kept, 400 numbers not shown,
+  114 already saved".
+- **`ExtractionMerger`** — dedupes across groups by number, tracking every
+  group a person appeared in. Members without a readable number are never
+  merged on name: two people both rendering as "John" are not the same person,
+  and collapsing them would silently delete someone.
+- **`GroupExtractor`** — scrolls the virtualised participant `RecyclerView`,
+  stopping after repeated barren passes, and records WhatsApp's own
+  "N participants" figure so an early-stopped scroll is detectable rather than
+  presenting as a complete extraction.
+- **`ExtractionRepository`** — saves through Phase 2's import path, so
+  extraction inherits phone normalisation, dedupe and, critically,
+  **suppression-list enforcement**: someone who replied STOP must not re-enter
+  the database because a group they're in got extracted.
+- **`ExtractionDao`** and extraction history; `ExtractionEntity` filled in with
+  reported-vs-read counts.
+- **Extract screen** (`ui/extract/`) with delayed capture, live progress,
+  filters, honest result counts, and a bottom-bar entry.
+- Export reuses Phase 2's `ContactExporter` — including its `hidden` handling —
+  so extraction and contact exports are byte-identical in format and both
+  produce **files only, never phonebook entries**.
+
+### Changed — Phase 4
+
+- `ContactsRepository.applyImport` takes an optional `sourceGroup`, populating
+  the `ContactEntity.sourceGroup` column Phase 2 scaffolded for this phase.
+- `ContactsRepository.knownNumbers()` added for the "skip people I already
+  have" filter.
+- `CLAUDE.md` documents the emulator workflow and now **requires every phase to
+  be run on the emulator before its PR**, with screenshots.
+
+### Known limitations — Phase 4
+
+- **Accessibility can only read rendered text, so numbers are recoverable only
+  for members not already saved on the phone.** The Chrome extension in
+  `docs/reference/` reads WhatsApp Web's internal store and gets a number for
+  everyone; the Android app has no equivalent. Extracted count will therefore
+  be lower than member count. Documented in `MemberNumberStatus`, surfaced in
+  the UI, and counted honestly rather than hidden.
+- A saved contact and a LID-hidden member are **indistinguishable** from a
+  rendered row, so the two are modelled as one status (`NotShown`).
+- The group-info selectors are researched candidates like Phase 1's, and **no
+  WhatsApp interaction has been verified on a device** — the emulator has no
+  WhatsApp and cannot realistically have one.
+- **The "capture every member by default" follow-up is CI-verified only, not
+  re-confirmed on the emulator.** The shared emulator was unresponsive under
+  host memory pressure (0.47 GB free) when this was ready to test — see
+  `MEMORY.md`. The change (a filter default flip plus additive export
+  buttons) doesn't touch anything the first Phase 4 pass already confirmed
+  renders correctly, but the export button itself has not been clicked on a
+  device.
+
+### Added — Phase 6: Activity log & campaign reports
+
+- **Activity log** (`ui/activitylog/ActivityLogScreen`) — every message that has
+  an outcome, newest first, with Sent / Failed / Skipped chips, a
+  filter-by-campaign row, "Show more" paging, and **Export CSV**. The log is the
+  app's receipt: when the client asks "did Mary get it?", this is the screen
+  that answers, which is why each row carries the *rendered* text rather than
+  the template it came from.
+- **Per-campaign report** (`ui/activitylog/CampaignReportScreen`) — headline
+  success rate, queued/sent/failed/skipped totals, the uniqueness figure of what
+  actually went out, the skip breakdown by reason, the failure breakdown by
+  wording, the pause reason if a circuit breaker stopped the run, and Export as
+  CSV or as text.
+- **Skips are counted, and are never failures.** `successRate` divides by
+  *attempted* (sent + failed) and excludes skips entirely, and the skip chip is
+  amber rather than red. A campaign that correctly skipped half its list for
+  opting out must not read as 50% successful — a report that scored it that way
+  would push the client toward turning the safety layers off.
+- **Pure-Kotlin report logic** in `data/repository/report/`, unit tested in CI
+  without a phone: `CampaignReport` (model plus a `SkipCategory` classifier),
+  `CampaignReportBuilder` (the arithmetic), and `ActivityLogExporter` (both
+  CSVs plus the text summary).
+- **Shared `CsvWriter`** (`data/repository/csv/`) — the RFC 4180 escaping was
+  extracted out of Phase 2's `ContactExporter`, which now delegates to it. A
+  rendered WhatsApp message routinely contains commas, quotes *and* newlines,
+  so a second hand-rolled escaper would have been a second chance to shift every
+  column one cell to the right.
+- **DAO additions only** (`CampaignDao`) — `observeActivityLog` /
+  `activityLog` (joined to the campaign name, filterable, limit+offset),
+  `observeActivityLogCount`, and `observeCampaignTotals`. No new
+  `@Database(entities = [...])` entries; every table already existed.
+- Activity log added to the bottom bar, and `ScopeWaNavHost` now delegates to
+  `activityLogGraph` instead of the Phase 6 placeholder.
+
+### Added — Phase 7: Group adder
+
+The last phase, shipped last on purpose: adding people to groups is the
+highest-risk thing the app does, and it gets its own rules from architecture
+doc section 6 **layer 5** rather than reusing the send-side pacing.
+
+- **The eligibility rule is enforced in code, not by convention.**
+  `brain/groupadd/GroupAddEligibility` will only ever offer people who have
+  **messaged the user before** (`contacts.times_replied > 0`) or who came from
+  a group they already belong to (`contacts.source_group`, which Phase 4's
+  extractor stamps). Everyone else is `Cold` and is refused. Provenance is
+  derived from the contact row, never entered by hand, so the rule can't be
+  talked around.
+- **The refusals are the loudest thing on the screen.** `ui/groupadd/` puts
+  "34 of 200 can be added — 166 are cold numbers" above the fold with the
+  reason spelled out, because a screen that quietly shipped a shorter list than
+  the user picked would leave him believing the rest were added.
+- **Strict pacing, with no profile picker** (`brain/groupadd/GroupAddPacing`):
+  batches of **3**, **60–150s** randomised between adds, **8–15 min**
+  randomised between batches, a daily cap of **20**, and a hard stop after **2**
+  consecutive failures. The daily cap belongs to the phone number, not the job
+  — three group-add jobs in a day share one allowance of 20.
+- **A "needs invite link" bucket that is never retried.** A number blocked by
+  its owner's "who can add me to groups" setting is a terminal outcome, not a
+  transient error (architecture doc section 8: *"not a bug"*). It leaves the
+  queue permanently and the run screen offers the list for sharing, so the
+  client sends an invite link by hand instead of retrying forever.
+- **`GroupAddPlanner`** lays the whole run out before it starts — ordered
+  batches, drawn delays, drawn cooldowns, and who the cap defers to tomorrow —
+  so the confirmation screen quotes real numbers. It re-screens its input, so a
+  caller that forgets to filter cold numbers still can't add them.
+- **`accessibility/WaGroupAdder`** mirrors `WaSender`'s shape: open the group,
+  open group info, Add participants, search, tap, confirm — then **verify
+  against the participant count** rather than assuming. Classifies WhatsApp's
+  privacy-block and already-a-member dialogs, and backs out to a known screen
+  after any failure so the *next* person in the batch isn't doomed too.
+- **`jobrunner/GroupAddJobService`** — its own foreground service, not a mode of
+  `CampaignJobService`: different pacing, different cap, a two-deep failure
+  breaker, and a bucket sending has no equivalent of. Asks the stop gate before
+  every single add, honours pause/resume/stop, holds a wake lock, and writes
+  each result to Room as it happens.
+- **`GroupAddJobEntity` fleshed out + `GroupAddJobDao`.** No new
+  `@Database(entities = [...])` entry — per-person results live on the job row
+  as encoded collections, which is acceptable precisely because the daily cap
+  caps a job at a few dozen people.
+- Routes wired into `ScopeWaNavHost` / `ScopeWaDestinations`, replacing the
+  Group Add "coming soon" placeholder.
+- **New selectors appended to `WaSelectors.kt`** for the six-screen group-add
+  flow, plus a participant-count reader. A new `WaSelectorsTest` case asserts
+  every one of them has a **view-id** candidate, not only a
+  content-description — the existing rule, and it matters more here because the
+  flow is deeper.
+- Unit tests for pacing bounds, the cold-number rule, batching, the daily cap,
+  the stop-after-exactly-two-failures gate (and that a skip is *not* a
+  failure), and that the invite bucket never re-enters the queue.
+
+**Not device tested.** Nothing in this phase has been run against a real
+phone; the group-add selectors are researched candidates and are very likely to
+need correcting from a Diagnostics dump. When it is tested it must be against a
+**disposable test group with test numbers only**.
+
+### Changed — Pre-release hardening
+
+- **Room schema export is on and destructive migration is gone.**
+  `exportSchema = true`, a `room.schemaLocation` KSP arg writes the schema to
+  `app/schemas/` (tracked in git, and added to the `androidTest` assets so
+  `MigrationTestHelper` can read it), and `fallbackToDestructiveMigration()` is
+  removed from the builder. This was always meant to happen at the first
+  release, and it has arrived: from here a schema change needs a real
+  `Migration` and a version bump, because a missing one now throws on the user's
+  first launch instead of silently wiping their contacts and campaigns.
+- **CI generates and checks the exported schema.** Nobody on this project has a
+  local JDK, so the build fails if KSP exported nothing, warns if `app/schemas`
+  drifts from what's committed, and uploads a `room-schema` artifact. The
+  `app/schemas/*.json` for version 1 is committed from a real CI build — never
+  hand-written, because a wrong schema is worse than a missing one.
+- **Version set to 1.0.0** (`versionCode = 1`), replacing the `0.1.0`
+  placeholder, so the release workflow tags `v1.0.0`.
+- **Minification is off for the release build type**, deliberately, and
+  `proguard-rules.pro` gained the Room entity/converter/enum keeps it was
+  missing. CI only ever assembles a debug APK, so no R8-processed build has been
+  run anywhere, and this app's failure mode under over-stripping is a silently
+  dead Accessibility run on a client's phone rather than a build error. The
+  distribution channel is a direct-install APK, so nothing is being bought with
+  that risk. Re-enabling is two lines once someone can test an R8 build on a
+  handset.
+
+### Added — Phase 5 follow-up: reply reading (closes the opt-out gap)
+
+`MEMORY.md` carried this as the one open item marked *blocking for the feature
+the client asked for*: `OptOutDetector` and `CampaignRepository.applyOptOut`
+were built and tested, but nothing in the app **observed** a reply arriving, so
+automatic STOP/ACHA/SITAKI handling was automatic in everything except the
+noticing — and `ColdBatchNoReplies` could never fire, because the reply count
+was zero by construction.
+
+- **`accessibility/WaNotificationListener`** — a `NotificationListenerService`.
+  Chosen over reading the chat list through the Accessibility service because
+  the Accessibility service can only read a screen that is *on screen*, and a
+  campaign runs for hours on a phone nobody is touching (architecture doc
+  section 10, Q4). The alternative would have meant driving WhatsApp to the
+  foreground every few minutes — visible, ban-flavoured behaviour that fights
+  the pacing layer — or missing every reply, which is all of them.
+- **The service is deliberately almost empty.** It lifts fields off a
+  `Notification` and hands them to pure code; nothing that could be wrong is
+  decided in a class CI cannot test.
+- **`brain/reply/`, all pure Kotlin and unit tested without a phone:**
+  - `ReplyNotificationParser` — every fiddly heuristic in one testable place.
+    Rejects non-WhatsApp packages, WhatsApp's own "3 new messages from 2 chats"
+    roll-up (with and without `FLAG_GROUP_SUMMARY`, since some OEM builds omit
+    it), the "Checking for new messages" foreground notice, silent and ongoing
+    notifications, typing indicators and call notices. Splits a
+    `Group name: Sender` title, strips the `Sender:` prefix off group message
+    text, drops WhatsApp's `~` marker on unsaved participants, and recognises
+    when a title is an unsaved contact's raw number. Returns null rather than
+    guessing. No regex anywhere — Android's ICU engine is stricter than the
+    JVM's and CI cannot catch the difference.
+  - `ReplyRouter` — decides opt-out / record-reply / ignore. Calls
+    `OptOutDetector` for the keyword decision rather than duplicating its
+    keyword list, and refuses to attribute group messages, ambiguous names, or
+    senders no campaign has messaged. Marking the wrong person opted out is
+    permanent and silent; ignoring costs a reply count and leaves the existing
+    hand-marking path.
+- **`accessibility/NotificationPermission`** — mirrors `AccessibilityPermission`
+  exactly: a grant check via `NotificationManagerCompat.getEnabledListenerPackages`
+  and an intent to notification-access settings with the same OEM fallback.
+- **Replies are persisted** — `campaign_messages.replied_at` / `reply_count`
+  and `contacts.last_replied_at`, alongside the `times_replied` counter that
+  already fed the replied-first recipient ordering. A reply is recorded against
+  the *most recent* message sent to that number, so one answer doesn't light up
+  months of history. Room schema version 2; destructive fallback covers it,
+  nothing has shipped.
+- **`ColdBatchNoReplies` is switched back on, gated.** `CampaignEngine` now
+  enables the rule only when a batch has genuinely been counted **and**
+  notification access is granted, re-read every loop so revoking it mid-campaign
+  disables the rule rather than pausing the run. `CircuitBreaker` itself is
+  untouched — it is a Phase 0 rule other phases depend on. Covered both ways in
+  `CampaignEngineTest`.
+- **A setup step for it**, in the same tone as the Accessibility step: what it
+  reads, that Android has no way to scope notification access to one app and
+  what the app does about that in code, that no message text is ever stored,
+  logged or exported — and that campaigns run fine without it, you just mark
+  opt-outs by hand.
+
+Not device-tested. The notification parsing heuristics in particular are
+WhatsApp's wording as documented and observed by others, not captured from the
+client's handsets.
+
 ### Added — Phase 5: Bulk sender
 
 - **Campaign composer** (`ui/campaign/`) — list + template + pacing profile +
@@ -110,13 +426,11 @@ merged PR, newest first within each release. Format loosely follows
   deliberately absent: they need Android APIs and `brain/` stays Android-free.
 - **`brain/uniqueness/UniquenessSummary.kt`** — the meter's wording as tested
   pure functions, since "warn loudly" is a requirement rather than styling.
-- **Room database** (`data/db/`) — `ScopeWaDatabase`, `TemplateEntity`,
-  `TemplateDao`, `TemplateRepository`. Per `docs/BUILD-PLAN.md`'s shared-hotspot
-  rule, the phase that lands the database first declares **all eight** tables
-  from architecture doc section 5.3; the other seven are one-line shells in
-  `data/db/entity/Shells.kt` for their owning phase to fill in without touching
-  `ScopeWaDatabase.kt`. Phase 3 got there before Phase 2, which the build plan
-  had expected to.
+- **Template persistence** — Phase 2's `TemplateEntity` scaffold filled in with
+  `knownVariables` (stored through Phase 2's `Converters`), plus `TemplateDao`,
+  `TemplateRepository`, and one `templateDao()` accessor on `ScopeWaDatabase`.
+  Exactly the additive shape `docs/BUILD-PLAN.md`'s shared-hotspot rule asks
+  for: no new `@Database(entities = [...])` entries.
 
 ### Fixed — a crash CI could not see
 
@@ -134,22 +448,16 @@ merged PR, newest first within each release. Format loosely follows
 
 ### Changed
 
-- `ui/home/HomeScreen.kt` gained a "Templates" button alongside Phase 1's
-  Setup and Diagnostics buttons. Writing and previewing a template needs no
-  Accessibility permission, so it is reachable before setup is finished.
 - Added `androidx.compose.material:material-icons-core` explicitly rather than
   relying on it arriving transitively via material3.
 
 ### Notes
 
 - The uniqueness meter reports a **floor**. It holds CSV values constant and
-  measures spintax variation only, because the editor has no contact list yet
-  (that's Phase 2) and inventing per-recipient names would inflate the score
-  with variation the template doesn't actually provide. The UI says so on
-  screen. Phase 5 recomputes it against the real list before sending.
-- The database is still built with `fallbackToDestructiveMigration()` while the
-  shell entities are being filled in. That must become real migrations before
-  the first APK reaches the client.
+  measures spintax variation only, because the editor cannot know a real contact
+  list, and inventing per-recipient names would inflate the score with variation
+  the template doesn't actually provide. The UI says so on screen. Phase 5
+  recomputes it against the real list before sending.
 - **Verified on an emulator, not a phone.** The click-through (list → editor →
   chips → spintax → preview cycling → uniqueness warning → save → reopen) was
   done on an API 30 emulator using the CI debug APK. Templates touch no

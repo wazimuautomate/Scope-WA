@@ -8,6 +8,8 @@ import androidx.room.TypeConverters
 import com.tricreta.scopewa.data.db.dao.CampaignDao
 import com.tricreta.scopewa.data.db.dao.ContactDao
 import com.tricreta.scopewa.data.db.dao.ContactListDao
+import com.tricreta.scopewa.data.db.dao.ExtractionDao
+import com.tricreta.scopewa.data.db.dao.GroupAddJobDao
 import com.tricreta.scopewa.data.db.dao.SuppressionDao
 import com.tricreta.scopewa.data.db.dao.TemplateDao
 import com.tricreta.scopewa.data.db.entity.CampaignEntity
@@ -20,6 +22,7 @@ import com.tricreta.scopewa.data.db.entity.GroupAddJobEntity
 import com.tricreta.scopewa.data.db.entity.SettingEntity
 import com.tricreta.scopewa.data.db.entity.SuppressionEntity
 import com.tricreta.scopewa.data.db.entity.TemplateEntity
+import com.tricreta.scopewa.data.db.migration.MIGRATION_1_2
 
 /**
  * The single Room database. Everything stays on the phone — architecture doc
@@ -38,12 +41,20 @@ import com.tricreta.scopewa.data.db.entity.TemplateEntity
  *
  * ## Migrations
  *
- * `exportSchema = false` and destructive fallback are deliberate *while
- * unreleased*. Nothing has shipped, so there is no user data to migrate and a
- * schema JSON would only record guesses that later phases will change. Before
- * the first signed release: turn schema export on, add a `room.schemaLocation`
- * KSP arg, commit the schema, and drop the destructive fallback. Tracked in
- * `MEMORY.md`.
+ * Schema export is on (`app/schemas/`, committed) and there is **no destructive
+ * fallback** — both changed for the 1.0.0 release.
+ *
+ * 1.0.0 ships at **version 2**. Version 1's schema was exported before Phases 4
+ * and 7 and the reply listener had merged, so it is a real, committed baseline
+ * that a debug install can be sitting on;
+ * [com.tricreta.scopewa.data.db.migration.MIGRATION_1_2] closes the gap between
+ * it and these entities. `1.json` stays committed — a migration you cannot test
+ * against its starting schema is not a migration.
+ *
+ * **From here on, every schema change needs a real `Migration` plus a `version`
+ * bump.** Without destructive fallback a missing migration is not a silent
+ * wipe — it is an `IllegalStateException` the first time the user opens the app
+ * after updating. Commit the new `app/schemas/<n>.json` alongside the migration.
  */
 @Database(
     entities = [
@@ -60,8 +71,11 @@ import com.tricreta.scopewa.data.db.entity.TemplateEntity
         GroupAddJobEntity::class,     // Phase 7
         SettingEntity::class          // Phase 1 (Settings screen)
     ],
-    version = 1,
-    exportSchema = false
+    // 2 — everything that landed after the version-1 schema was exported: the
+    //     reply listener's columns, Phase 4's extraction counters and Phase 7's
+    //     group-add job row. See [MIGRATION_1_2].
+    version = 2,
+    exportSchema = true
 )
 @TypeConverters(Converters::class)
 abstract class ScopeWaDatabase : RoomDatabase() {
@@ -70,7 +84,9 @@ abstract class ScopeWaDatabase : RoomDatabase() {
     abstract fun contactListDao(): ContactListDao
     abstract fun suppressionDao(): SuppressionDao
     abstract fun templateDao(): TemplateDao
+    abstract fun extractionDao(): ExtractionDao
     abstract fun campaignDao(): CampaignDao
+    abstract fun groupAddJobDao(): GroupAddJobDao
 
     companion object {
         private const val NAME = "scope_wa.db"
@@ -92,8 +108,11 @@ abstract class ScopeWaDatabase : RoomDatabase() {
 
         private fun build(context: Context): ScopeWaDatabase =
             Room.databaseBuilder(context, ScopeWaDatabase::class.java, NAME)
-                // Pre-release only — see the migration note in this class's KDoc.
-                .fallbackToDestructiveMigration()
+                // Deliberately no .fallbackToDestructiveMigration(): losing a
+                // client's contacts, suppression list and campaign history to a
+                // forgotten migration is worse than crashing on launch, because
+                // the crash is noticed and the wipe is not.
+                .addMigrations(MIGRATION_1_2)
                 .build()
     }
 }
