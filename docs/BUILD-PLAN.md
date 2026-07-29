@@ -43,11 +43,10 @@ three more unit-tested pure-Kotlin pieces to reuse rather than reimplement:
   clock-derived values
 - `brain/uniqueness/UniquenessSummary.kt` — the meter's exact wording
 
-**Phase 3 also landed the Room database**, ahead of Phase 2. Per the
-shared-hotspot rule below, all eight tables from architecture doc section 5.3
-are already declared in `data/db/ScopeWaDatabase.kt`; seven are one-line shells
-in `data/db/entity/Shells.kt`. **Phases 2, 4, 5, 6 and 7: fill in your own shell
-entity and add its DAO — do not add entries to `@Database(entities = [...])`.**
+Phase 3 filled in Phase 2's `TemplateEntity` scaffold and added `TemplateDao` +
+one `templateDao()` accessor — the additive shape the shared-hotspot rule below
+asks for. **Phases 4, 5, 6 and 7: do the same. Do not add entries to
+`@Database(entities = [...])`; your table is already registered.**
 
 **Phase 1 — code complete, awaiting device verification.** The accessibility
 service, node finding, selector capture tooling, WhatsApp probe, and permission

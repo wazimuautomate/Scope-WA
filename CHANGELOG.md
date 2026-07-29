@@ -110,13 +110,11 @@ merged PR, newest first within each release. Format loosely follows
   deliberately absent: they need Android APIs and `brain/` stays Android-free.
 - **`brain/uniqueness/UniquenessSummary.kt`** — the meter's wording as tested
   pure functions, since "warn loudly" is a requirement rather than styling.
-- **Room database** (`data/db/`) — `ScopeWaDatabase`, `TemplateEntity`,
-  `TemplateDao`, `TemplateRepository`. Per `docs/BUILD-PLAN.md`'s shared-hotspot
-  rule, the phase that lands the database first declares **all eight** tables
-  from architecture doc section 5.3; the other seven are one-line shells in
-  `data/db/entity/Shells.kt` for their owning phase to fill in without touching
-  `ScopeWaDatabase.kt`. Phase 3 got there before Phase 2, which the build plan
-  had expected to.
+- **Template persistence** — Phase 2's `TemplateEntity` scaffold filled in with
+  `knownVariables` (stored through Phase 2's `Converters`), plus `TemplateDao`,
+  `TemplateRepository`, and one `templateDao()` accessor on `ScopeWaDatabase`.
+  Exactly the additive shape `docs/BUILD-PLAN.md`'s shared-hotspot rule asks
+  for: no new `@Database(entities = [...])` entries.
 
 ### Fixed — a crash CI could not see
 
@@ -134,22 +132,16 @@ merged PR, newest first within each release. Format loosely follows
 
 ### Changed
 
-- `ui/home/HomeScreen.kt` gained a "Templates" button alongside Phase 1's
-  Setup and Diagnostics buttons. Writing and previewing a template needs no
-  Accessibility permission, so it is reachable before setup is finished.
 - Added `androidx.compose.material:material-icons-core` explicitly rather than
   relying on it arriving transitively via material3.
 
 ### Notes
 
 - The uniqueness meter reports a **floor**. It holds CSV values constant and
-  measures spintax variation only, because the editor has no contact list yet
-  (that's Phase 2) and inventing per-recipient names would inflate the score
-  with variation the template doesn't actually provide. The UI says so on
-  screen. Phase 5 recomputes it against the real list before sending.
-- The database is still built with `fallbackToDestructiveMigration()` while the
-  shell entities are being filled in. That must become real migrations before
-  the first APK reaches the client.
+  measures spintax variation only, because the editor cannot know a real contact
+  list, and inventing per-recipient names would inflate the score with variation
+  the template doesn't actually provide. The UI says so on screen. Phase 5
+  recomputes it against the real list before sending.
 - **Verified on an emulator, not a phone.** The click-through (list → editor →
   chips → spintax → preview cycling → uniqueness warning → save → reopen) was
   done on an API 30 emulator using the CI debug APK. Templates touch no
