@@ -46,8 +46,11 @@ object OptOutDetector {
      */
     const val MAX_WORDS = 8
 
+    /** Straight and curly, so a phone keyboard's autocorrect doesn't defeat the guard. */
+    private val APOSTROPHES = setOf('\'', '’', 'ʼ')
+
     /** "don't stop" is the opposite of an opt-out. */
-    private val NEGATIONS = setOf("dont", "don", "do", "not", "never", "no")
+    private val NEGATIONS = setOf("dont", "don", "do", "not", "never", "no", "usiache")
 
     /** "stop by", "stop at" — an arrangement to meet, not an unsubscribe. */
     private val PHRASE_CONTINUATIONS = setOf("by", "at", "over", "there", "here")
@@ -63,6 +66,11 @@ object OptOutDetector {
 
         val words = replyText
             .lowercase()
+            // Apostrophes are dropped rather than treated as separators, so
+            // "don't" stays one word and the negation guard below can see it.
+            // Splitting it into "don" + "t" would put "t" next to the keyword
+            // and let "don't stop" through as an opt-out.
+            .filterNot { it in APOSTROPHES }
             .map { if (it.isLetterOrDigit()) it else ' ' }
             .joinToString("")
             .split(' ')
