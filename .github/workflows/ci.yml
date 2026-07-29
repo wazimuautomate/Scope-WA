@@ -1,13 +1,20 @@
 name: CI
 
-# Runs on every push to features/main and every PR into main — see CLAUDE.md's
-# branch policy. No local Android Studio is required; this pipeline is the
-# only thing that has to build the app (architecture doc section 4).
+# Runs on every branch and on PRs into both integration branches.
+#
+# CLAUDE.md requires CI to be green *before* a phase branch opens a PR into
+# `features`, and phases are built in parallel by separate sessions. Limiting
+# triggers to main/features would mean a phase branch got no CI at all until
+# its PR was already open, and a PR into `features` would never run checks —
+# so the gate the branch policy depends on would not exist.
+#
+# No local Android Studio is required; this pipeline is the only thing that
+# has to build the app (architecture doc section 4).
 on:
   push:
-    branches: [main, features]
+    branches: ["**"]
   pull_request:
-    branches: [main]
+    branches: [main, features]
 
 jobs:
   build-and-test:
@@ -32,8 +39,43 @@ jobs:
       - name: Unit test the brain layer
         run: gradle testDebugUnitTest --stacktrace
 
+      # Gradle prints per-test detail only on failure, and the console log is
+      # awkward to read across parallel phase branches. Keep the HTML report.
+      - name: Upload test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report-${{ github.ref_name }}
+          path: app/build/reports/tests/testDebugUnitTest/
+          retention-days: 7
+
       - name: Assemble debug APK
         run: gradle assembleDebug --stacktrace
+
+      # Room writes the exported schema during KSP (see `room.schemaLocation` in
+      # app/build.gradle.kts). It must be committed — migrations are validated
+      # against it, and destructive fallback is gone as of 1.0.0. Nobody on this
+      # project has a local JDK, so CI is the only thing that can generate it:
+      # download this artifact and commit the JSON under `app/schemas/`.
+      - name: Check exported Room schema is committed
+        run: |
+          if [ -z "$(find app/schemas -name '*.json' -print -quit 2>/dev/null)" ]; then
+            echo "::error::Room exported no schema JSON — check room.schemaLocation in app/build.gradle.kts."
+            exit 1
+          fi
+          if [ -n "$(git status --porcelain app/schemas)" ]; then
+            echo "::warning::app/schemas is out of date in git. Download the room-schema artifact from this run and commit it."
+            git status --porcelain app/schemas
+          fi
+
+      - name: Upload Room schema
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: room-schema
+          path: app/schemas/
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4

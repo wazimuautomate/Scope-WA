@@ -3,11 +3,24 @@ package com.tricreta.scopewa.ui.navigation
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.tricreta.scopewa.ui.common.ComingSoonScreen
+import androidx.navigation.navArgument
+import com.tricreta.scopewa.data.db.entity.TemplateEntity
+import com.tricreta.scopewa.ui.activitylog.activityLogGraph
+import com.tricreta.scopewa.ui.campaign.campaignGraph
+import com.tricreta.scopewa.ui.contacts.contactsGraph
+import com.tricreta.scopewa.ui.extract.ExtractScreen
+import com.tricreta.scopewa.ui.groupadd.groupAddGraph
 import com.tricreta.scopewa.ui.home.HomeScreen
+import com.tricreta.scopewa.ui.more.MoreScreen
+import com.tricreta.scopewa.ui.settings.DiagnosticsScreen
+import com.tricreta.scopewa.ui.settings.SetupScreen
+import com.tricreta.scopewa.ui.templates.TemplateEditorScreen
+import com.tricreta.scopewa.ui.templates.TemplateListScreen
+import com.tricreta.scopewa.ui.templates.TemplateRoutes
 
 @Composable
 fun ScopeWaNavHost(
@@ -19,31 +32,60 @@ fun ScopeWaNavHost(
         startDestination = ScopeWaDestination.Home.route,
         modifier = modifier
     ) {
-        composable(ScopeWaDestination.Home.route) { HomeScreen() }
+        composable(ScopeWaDestination.Home.route) {
+            HomeScreen(
+                onOpenSetup = { navController.navigate(ScopeWaDestination.Setup.route) },
+                onOpenDiagnostics = { navController.navigate(ScopeWaDestination.Diagnostics.route) }
+            )
+        }
 
-        composable(ScopeWaDestination.Contacts.route) {
-            ComingSoonScreen("Contacts", "Lands in Phase 2 — see architecture doc section 9.")
-        }
-        composable(ScopeWaDestination.Extract.route) {
-            ComingSoonScreen("Extract", "Lands in Phase 4 — see architecture doc section 9.")
-        }
+        composable(ScopeWaDestination.Setup.route) { SetupScreen() }
+        composable(ScopeWaDestination.Diagnostics.route) { DiagnosticsScreen() }
+
+        // Phase 2 — lists, import, picker and export all live under `contacts/`.
+        contactsGraph(navController)
+
+        // Phase 4 — reads a group's participants through the accessibility service.
+        composable(ScopeWaDestination.Extract.route) { ExtractScreen() }
         composable(ScopeWaDestination.Templates.route) {
-            ComingSoonScreen("Templates", "Lands in Phase 3 — see architecture doc section 9.")
+            TemplateListScreen(
+                onOpenTemplate = { templateId ->
+                    navController.navigate(TemplateRoutes.editor(templateId))
+                }
+            )
         }
-        composable(ScopeWaDestination.Campaign.route) {
-            ComingSoonScreen("Campaign", "Lands in Phase 5 — see architecture doc section 9.")
+        composable(
+            route = TemplateRoutes.EDITOR,
+            arguments = listOf(
+                navArgument(TemplateRoutes.ARG_TEMPLATE_ID) { type = NavType.LongType }
+            )
+        ) { entry ->
+            TemplateEditorScreen(
+                templateId = entry.arguments?.getLong(TemplateRoutes.ARG_TEMPLATE_ID)
+                    ?: TemplateEntity.NEW_TEMPLATE_ID,
+                onDone = { navController.popBackStack() }
+            )
         }
-        composable(ScopeWaDestination.Running.route) {
-            ComingSoonScreen("Running", "Lands in Phase 5 — see architecture doc section 9.")
-        }
-        composable(ScopeWaDestination.GroupAdd.route) {
-            ComingSoonScreen("Group Add", "Lands in Phase 7 — ships last, strictest settings.")
-        }
-        composable(ScopeWaDestination.ActivityLog.route) {
-            ComingSoonScreen("Activity log", "Lands in Phase 6 — see architecture doc section 9.")
-        }
-        composable(ScopeWaDestination.Settings.route) {
-            ComingSoonScreen("Settings", "Lands alongside Phase 1's permission walkthrough.")
+        // Phase 5 — the composer and the live progress screen.
+        campaignGraph(navController)
+
+        // Phase 7 — the setup screen and the live buckets.
+        groupAddGraph(navController)
+
+        // Phase 6 — the log of everything sent, and the per-campaign reports.
+        activityLogGraph(navController)
+        // Settings currently *is* the setup walkthrough — it covers the
+        // WhatsApp-variant choice and permissions health from architecture doc
+        // section 7. Pacing profiles, active hours, caps, and warm-up state
+        // join it in Phase 5, when there is a campaign for them to govern.
+        composable(ScopeWaDestination.Settings.route) { SetupScreen() }
+
+        // The overflow half of the bottom bar. Everything that does not fit on a
+        // five-item NavigationBar is reachable from here — see ScopeWaBottomBar.
+        composable(ScopeWaDestination.More.route) {
+            MoreScreen(
+                onOpen = { destination -> navController.navigate(destination.route) }
+            )
         }
     }
 }

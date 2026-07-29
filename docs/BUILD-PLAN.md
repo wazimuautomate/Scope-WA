@@ -33,6 +33,39 @@ unit tested** — reuse them, don't reimplement:
 - `brain/pacing/PacingPlanner.kt` — Safe/Normal/Fast profiles, randomised delays
 - `brain/safety/CircuitBreaker.kt` — the five auto-pause conditions
 
+**Phase 3 — built** (2026-07-29, branch `phase-3-templates`). Template list and
+editor, variable chips, spintax starters, live preview, uniqueness meter, plus
+three more unit-tested pure-Kotlin pieces to reuse rather than reimplement:
+
+- `brain/template/TemplateAnalyzer.kt` — block classification, spintax
+  combination counts, seeded previews, campaign uniqueness estimates
+- `brain/template/TemplateVariables.kt` — the variable catalogue and its
+  clock-derived values
+- `brain/uniqueness/UniquenessSummary.kt` — the meter's exact wording
+
+Phase 3 filled in Phase 2's `TemplateEntity` scaffold and added `TemplateDao` +
+one `templateDao()` accessor — the additive shape the shared-hotspot rule below
+asks for. **Phases 4, 5, 6 and 7: do the same. Do not add entries to
+`@Database(entities = [...])`; your table is already registered.**
+
+**Phase 1 — code complete, awaiting device verification.** The accessibility
+service, node finding, selector capture tooling, WhatsApp probe, and permission
+walkthrough are built and CI-green. Reusable pieces for later phases:
+
+- `accessibility/WaSelectors.kt` — all WhatsApp selectors, ordered fallbacks.
+  **Append to this; never hardcode a view-id elsewhere.**
+- `accessibility/NodeFinder.kt` — tree search reporting which candidate matched.
+- `accessibility/WaServiceBridge.kt` — `isConnected` + current window root.
+- `accessibility/WaScreenDump.kt` + Diagnostics screen — capture real selectors
+  off a device when something breaks.
+- `brain/whatsapp/WaDeepLink.kt` — `wa.me` URL builder for the send path.
+
+> ⚠️ **Phase 1's selectors are researched candidates, not device-verified.**
+> Phases 4, 5 and 7 all drive WhatsApp through them. Before starting any of
+> those, confirm the probe passes on a real handset — see "What Phase 1 still
+> needs" in `MEMORY.md`. Building on unverified selectors risks debugging your
+> own phase against a fault that isn't yours.
+
 Everything else below is unbuilt.
 
 ## Dependency graph
@@ -156,6 +189,19 @@ section 10 Q8: **never write to the phone's contacts app** — export only.
 unit tests for dedupe-across-groups and filter logic.
 
 **Reference:** architecture doc sections 3.2, 5.1, 10 (Q7/Q8).
+
+> **Status: code complete on `phase-4-extractor`; WhatsApp side unverified.**
+> Screen, filter state and readiness guard were verified on the emulator, which
+> has no WhatsApp — so the scroll/read routine has never run against a real
+> group. Reusable by Phase 7: `data/repository/extract/` (member parsing,
+> filters, cross-group dedupe — pure and unit tested),
+> `accessibility/GroupExtractor.kt`, and the group selectors appended to
+> `WaSelectors.kt`.
+>
+> **A constraint Phase 7 inherits:** accessibility reads only *rendered* text,
+> so a participant's number is readable **only when they are not already saved
+> on the phone**. Candidate lists built from extractions will cover fewer
+> people than a group's member count — see `MemberNumberStatus` and `MEMORY.md`.
 
 ---
 

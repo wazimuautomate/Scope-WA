@@ -25,7 +25,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -43,8 +43,21 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            // Minification is OFF for the 1.0.0 release, deliberately.
+            //
+            // CI only ever assembles a *debug* APK, so no R8-processed build has
+            // ever been run — not in CI, not on a device. The core of this app is
+            // an Accessibility Service that finds WhatsApp views by name; a class
+            // or method R8 strips shows up as a silently dead automation run on
+            // the client's phone, not as a build failure, and there is no crash
+            // reporting to catch it. Distribution is a direct-install APK
+            // (architecture doc section 4), so there is no size limit paying for
+            // that risk either.
+            //
+            // `proguard-rules.pro` is kept current so this is a two-line change
+            // once someone can test an R8 build on a real device.
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             if (keystorePropertiesFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")
@@ -84,19 +97,33 @@ android {
         }
         getByName("androidTest") {
             kotlin.srcDirs("src/androidTest/kotlin")
+            // Room's MigrationTestHelper reads the exported schema JSON from the
+            // test APK's assets. No migration test exists yet (v1 is the first
+            // shipped schema), but the wiring has to be here before one can.
+            assets.srcDirs("$projectDir/schemas")
         }
     }
+}
+
+// Room exports the schema of every version to `app/schemas/` so migrations can
+// be written and tested against a real, committed baseline. As of 1.0.0 this
+// directory is tracked in git — see MEMORY.md.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    implementation(libs.androidx.material.icons.core)
     implementation(libs.androidx.navigation.compose)
 
     implementation(libs.androidx.room.runtime)
