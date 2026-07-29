@@ -76,7 +76,9 @@ object TemplateAnalyzer {
     /** Matches the doc's "200 messages · 194 unique (97%) · 6 exact duplicates" example. */
     const val DEFAULT_CAMPAIGN_SIZE = 200
 
-    private val blockPattern = Regex("\\{([^{}]*)}")
+    // Keep both braces escaped — see the note on TemplateEngine.blockPattern.
+    // An unescaped `}` passes CI and crashes on the device.
+    private val blockPattern = Regex("\\{([^{}]*)\\}")
 
     fun analyze(template: String, knownVariableNames: Set<String>): TemplateAnalysis {
         val known = knownVariableNames.mapTo(mutableSetOf()) { it.trim().lowercase() }
