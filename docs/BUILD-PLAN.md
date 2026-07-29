@@ -49,6 +49,24 @@ are already declared in `data/db/ScopeWaDatabase.kt`; seven are one-line shells
 in `data/db/entity/Shells.kt`. **Phases 2, 4, 5, 6 and 7: fill in your own shell
 entity and add its DAO — do not add entries to `@Database(entities = [...])`.**
 
+**Phase 1 — code complete, awaiting device verification.** The accessibility
+service, node finding, selector capture tooling, WhatsApp probe, and permission
+walkthrough are built and CI-green. Reusable pieces for later phases:
+
+- `accessibility/WaSelectors.kt` — all WhatsApp selectors, ordered fallbacks.
+  **Append to this; never hardcode a view-id elsewhere.**
+- `accessibility/NodeFinder.kt` — tree search reporting which candidate matched.
+- `accessibility/WaServiceBridge.kt` — `isConnected` + current window root.
+- `accessibility/WaScreenDump.kt` + Diagnostics screen — capture real selectors
+  off a device when something breaks.
+- `brain/whatsapp/WaDeepLink.kt` — `wa.me` URL builder for the send path.
+
+> ⚠️ **Phase 1's selectors are researched candidates, not device-verified.**
+> Phases 4, 5 and 7 all drive WhatsApp through them. Before starting any of
+> those, confirm the probe passes on a real handset — see "What Phase 1 still
+> needs" in `MEMORY.md`. Building on unverified selectors risks debugging your
+> own phase against a fault that isn't yours.
+
 Everything else below is unbuilt.
 
 ## Dependency graph

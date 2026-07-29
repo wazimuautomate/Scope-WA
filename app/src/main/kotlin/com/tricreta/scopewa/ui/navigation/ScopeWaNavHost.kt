@@ -11,6 +11,8 @@ import androidx.navigation.navArgument
 import com.tricreta.scopewa.data.db.entity.TemplateEntity
 import com.tricreta.scopewa.ui.common.ComingSoonScreen
 import com.tricreta.scopewa.ui.home.HomeScreen
+import com.tricreta.scopewa.ui.settings.DiagnosticsScreen
+import com.tricreta.scopewa.ui.settings.SetupScreen
 import com.tricreta.scopewa.ui.templates.TemplateEditorScreen
 import com.tricreta.scopewa.ui.templates.TemplateListScreen
 import com.tricreta.scopewa.ui.templates.TemplateRoutes
@@ -27,9 +29,14 @@ fun ScopeWaNavHost(
     ) {
         composable(ScopeWaDestination.Home.route) {
             HomeScreen(
+                onOpenSetup = { navController.navigate(ScopeWaDestination.Setup.route) },
+                onOpenDiagnostics = { navController.navigate(ScopeWaDestination.Diagnostics.route) },
                 onOpenTemplates = { navController.navigate(ScopeWaDestination.Templates.route) }
             )
         }
+
+        composable(ScopeWaDestination.Setup.route) { SetupScreen() }
+        composable(ScopeWaDestination.Diagnostics.route) { DiagnosticsScreen() }
 
         composable(ScopeWaDestination.Contacts.route) {
             ComingSoonScreen("Contacts", "Lands in Phase 2 — see architecture doc section 9.")
@@ -68,8 +75,10 @@ fun ScopeWaNavHost(
         composable(ScopeWaDestination.ActivityLog.route) {
             ComingSoonScreen("Activity log", "Lands in Phase 6 — see architecture doc section 9.")
         }
-        composable(ScopeWaDestination.Settings.route) {
-            ComingSoonScreen("Settings", "Lands alongside Phase 1's permission walkthrough.")
-        }
+        // Settings currently *is* the setup walkthrough — it covers the
+        // WhatsApp-variant choice and permissions health from architecture doc
+        // section 7. Pacing profiles, active hours, caps, and warm-up state
+        // join it in Phase 5, when there is a campaign for them to govern.
+        composable(ScopeWaDestination.Settings.route) { SetupScreen() }
     }
 }

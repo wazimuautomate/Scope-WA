@@ -45,17 +45,24 @@ merged PR, newest first within each release. Format loosely follows
   `ScopeWaDatabase.kt`. Phase 3 got there before Phase 2, which the build plan
   had expected to.
 
+### Fixed — a crash CI could not see
+
+- **`Regex("\{([^{}]*)}")` crashed on device.** The unescaped closing brace
+  compiles fine on the JVM, so every unit test passed and CI was green, but
+  Android's ICU-backed regex engine rejects it with `PatternSyntaxException`.
+  `TemplateEngine` (Phase 0) carried the identical pattern, so this was never a
+  Phase 3 bug — it would have taken out Phase 5's send routine the first time it
+  rendered a message on a phone. Fixed in both, with a comment at each site
+  since no JVM test can catch it. Found by installing the CI debug APK on an
+  emulator.
+
 ### Changed
 
-- `ci.yml` now runs on pull requests into `features`, not only into `main`.
-  `CLAUDE.md` requires green CI before a phase branch merges into `features`,
-  and the old triggers never ran for those PRs.
-- `ui/home/HomeScreen.kt` gained a temporary "Templates" button. Phase 1 owns
-  this file and replaces it wholesale; without an entry point the new screens
-  couldn't be reached on a device at all.
-- Added `androidx.lifecycle:lifecycle-viewmodel-compose` and
-  `androidx.compose.material:material-icons-core` explicitly rather than
-  relying on them arriving transitively.
+- `ui/home/HomeScreen.kt` gained a "Templates" button alongside Phase 1's
+  Setup and Diagnostics buttons. Writing and previewing a template needs no
+  Accessibility permission, so it is reachable before setup is finished.
+- Added `androidx.compose.material:material-icons-core` explicitly rather than
+  relying on it arriving transitively via material3.
 
 ### Notes
 
@@ -67,6 +74,64 @@ merged PR, newest first within each release. Format loosely follows
 - The database is still built with `fallbackToDestructiveMigration()` while the
   shell entities are being filled in. That must become real migrations before
   the first APK reaches the client.
+- **Verified on an emulator, not a phone.** The click-through (list → editor →
+  chips → spintax → preview cycling → uniqueness warning → save → reopen) was
+  done on an API 30 emulator using the CI debug APK. Templates touch no
+  Accessibility APIs, so an emulator is a fair test of this screen; Phase 1's
+  probe still needs a real handset.
+
+### Added — Phase 1: Accessibility Service + permission walkthrough
+
+- **`WaSelectors` rewritten as ordered fallback candidates** for both
+  `com.whatsapp` and `com.whatsapp.w4b`, covering the compose box, send
+  button, conversation title, participant list, and add-participant search,
+  plus text fragments for WhatsApp's restriction and privacy-blocked dialogs.
+  Kept free of Android imports so its matching rules are unit tested in CI.
+- **`NodeFinder`** — walks accessibility node trees trying view-ids first,
+  then content-descriptions, then visible text, and reports *which* candidate
+  matched so a stale selector is diagnosable rather than merely broken.
+- **`WaScreenDump` + Diagnostics screen** — captures a live WhatsApp screen on
+  a 10-second delay (the user needs time to switch apps) and renders it as
+  shareable text, with a per-selector found/not-found report on top. This is
+  what makes architecture doc section 8's "a break is a small patch" promise
+  real: repairing a selector no longer needs a laptop and `uiautomatorviewer`.
+- **`WaProbe`** — the Phase 1 acceptance test from architecture doc section 9.
+  Opens WhatsApp through the documented `wa.me` deep link and confirms the
+  service can read the compose box. Never touches the send button, and uses a
+  reserved example number so it cannot reach a real person.
+- **`ProbeResultPresenter`** — turns each probe outcome into a headline, an
+  explanation, and a next step. Unit tested, because this is the client's only
+  feedback when setup fails; notably it distinguishes "permission is broken"
+  from "permission works, WhatsApp changed its layout", which need opposite fixes.
+- **Guided setup walkthrough** (`ui/settings/SetupScreen`) — ordered steps for
+  choosing the WhatsApp variant, granting Accessibility, and exempting the app
+  from battery optimisation. Includes the **Android 13+ restricted-settings
+  step**, which greys out the Accessibility toggle for sideloaded apps; since
+  Scope WA ships as a direct-install APK (architecture doc section 4), skipping
+  this would make the app look broken on the client's newer phones.
+- **`WaServiceBridge`** — observable connection state, distinguishing "enabled
+  in Android Settings" from "actually bound and able to read screens".
+- **`WaDeepLink`** (in `brain/`) — pure `wa.me` URL builder, unit tested.
+- **HomeScreen** now shows live readiness instead of a static placeholder.
+
+### Fixed
+
+- **CI never ran on phase branches.** `ci.yml` triggered only on pushes to
+  `main`/`features` and PRs into `main`, but `CLAUDE.md` requires green CI
+  *before* a phase branch opens a PR into `features` — so the gate the branch
+  policy depends on did not exist, and a PR into `features` ran no checks at
+  all. Now runs on every branch and on PRs into both integration branches.
+  This blocked Phases 2 and 3 equally.
+- CI keeps the HTML test report as an artifact when tests fail.
+
+### Known limitations
+
+- **The WhatsApp view-ids in `WaSelectors` are researched candidates, not
+  device-verified.** They have not been confirmed against the client's handsets
+  or WhatsApp versions. The ordered-fallback design means a wrong guess
+  degrades to the next candidate, and the Diagnostics screen exists to capture
+  the real values — but until someone runs the probe on a real phone, Phase 1's
+  acceptance criterion is not met. See `MEMORY.md`.
 
 ## [0.1.0] — 2026-07-29 — Phase 0: project skeleton
 

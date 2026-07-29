@@ -8,21 +8,19 @@ discipline section. This is not a changelog (that's `CHANGELOG.md`); it's
 
 **Phase 0 — done.** Project skeleton, CI, git repo, and governance docs.
 
-**Phase 3 (Templates) — built, on branch `phase-3-templates`, PR into
-`features`** (2026-07-29). Template list + editor, variable chips, spintax
-starters, live preview cycling 5 renders, uniqueness meter in the doc's exact
-wording. New pure-Kotlin `brain/template/TemplateAnalyzer.kt`,
+**Phase 3 (Templates) — built and emulator-verified, PR #2 into `features`**
+(2026-07-29). Template list + editor, variable chips, spintax starters, live
+preview cycling 5 renders, uniqueness meter in the doc's exact wording. New
+pure-Kotlin `brain/template/TemplateAnalyzer.kt`,
 `brain/template/TemplateVariables.kt` and
 `brain/uniqueness/UniquenessSummary.kt`, all unit tested. Phase 5 consumes
 these; nothing else does yet.
 
-**Phase 4 (Group extractor) — in progress in a parallel session** as of the
-same day, working in `accessibility/WaSelectors.kt`, `accessibility/WaPackage.kt`
-and a new `brain/whatsapp/` package. Note it started ahead of its stated
-dependencies (Phases 1 and 2).
+**Phases 2 (Contacts) and 4 (Group extractor) are in progress in parallel
+sessions** as of the same day. Phase 4 started ahead of its stated
+dependencies.
 
-Still unstarted: Phases 1 (Accessibility Service), 2 (Contacts), 5, 6, 7.
-Phase 1 needs a physical Android device and is the long pole.
+Still unstarted: Phases 5, 6, 7.
 
 ### Phase 3 decisions Phase 2 and Phase 5 need to know
 
@@ -44,11 +42,40 @@ Phase 1 needs a physical Android device and is the long pole.
   values constant and measures spintax variation only, because there is no
   contact list until Phase 2. Phase 5 must recompute it against the real
   rendered campaign before sending — that is the number section 6 describes.
-- **`ci.yml` now runs on PRs into `features`.** It previously ran only on PRs
-  into `main`, so `CLAUDE.md`'s "CI green before merging into `features`" rule
-  was unenforceable.
-- **`ui/home/HomeScreen.kt` has a temporary "Templates" button.** Phase 1 owns
-  that file and should drop the button when it builds the real home screen.
+- **`ui/home/HomeScreen.kt` has a "Templates" button** next to Phase 1's Setup
+  and Diagnostics buttons. Templates need no Accessibility permission, so the
+  screen is reachable before setup is finished.
+
+**Phase 1 — code complete, NOT device-verified.** Accessibility service,
+node finding, selector capture tooling, the WhatsApp probe, and the guided
+permission walkthrough are all built and CI-green (branch
+`phase-1-accessibility`).
+
+> ⚠️ **Phase 1's acceptance criterion is not yet met.** `docs/BUILD-PLAN.md`
+> requires it to work "on a real phone", and nothing here has touched one.
+> The WhatsApp view-ids in `accessibility/WaSelectors.kt` are researched
+> candidates, not captured from a device — they may simply be wrong. **Do not
+> treat Phase 1 as done, and do not start Phase 4, 5, or 7, until someone runs
+> the in-app test on a real handset.** See "What Phase 1 still needs" below.
+
+Phases 2 (Contacts) and 3 (Templates) are being built in parallel by other
+sessions and depend on none of this.
+
+## What Phase 1 still needs (a human with the phone, ~10 minutes)
+
+1. Install the debug APK from the CI run on a phone that has WhatsApp.
+2. Open Scope WA → **Finish setup**, work through the steps, grant Accessibility.
+3. Run **Test it**. Then:
+   - **"WhatsApp automation is working"** → Phase 1 is genuinely done. Record
+     the WhatsApp version it reported here, and phases 4/5/7 are unblocked.
+   - **"message box wasn't recognised"** → the permission works but the
+     selectors are wrong, which is the expected outcome if the researched ids
+     are stale. Use **Diagnostics → Start capture**, switch to a WhatsApp chat,
+     share the dump, and correct `WaSelectors.kt` from it. This is a one-line
+     fix per selector, by design.
+4. Repeat on both WhatsApp and WhatsApp Business, and on both a Samsung and a
+   Tecno handset if available — OEM builds differ, and the client uses both
+   (architecture doc section 10, Q4).
 
 ## Key decisions on record
 
@@ -91,6 +118,26 @@ All answered as of the architecture doc's writing (2026-07-29):
 
 Nothing outstanding from the client as of Phase 0. If a later phase surfaces
 a new open question, add it here with the date it came up.
+
+## Things learned while building (don't rediscover these)
+
+- **Android 13+ blocks Accessibility for sideloaded apps.** The toggle appears
+  but is greyed out until the user does App info → ⋮ → *Allow restricted
+  settings*. Scope WA is direct-install by design (architecture doc section 4),
+  so this hits every install on a modern phone. The setup walkthrough covers
+  it; don't remove that step thinking it's redundant.
+- **"Enabled in Settings" ≠ "connected".** The service can be ticked in
+  Android Settings without being bound (briefly after toggling, and after a
+  force-stop on some OEM builds). Readiness checks must use
+  `WaServiceBridge.isConnected`, not the Settings value.
+- **Content-descriptions are localised.** "Type a message" doesn't exist on a
+  Swahili phone. Anything on the critical send path needs a view-id candidate;
+  there's a unit test enforcing this.
+- **`URLEncoder` breaks wa.me links.** It form-encodes spaces as `+`, which
+  WhatsApp renders literally — messages arrive with plus signs between every
+  word. `WaDeepLink` converts to `%20`; there's a test pinning it.
+- **CI didn't run on phase branches** until Phase 1 fixed `ci.yml`. If a
+  branch seems to have no checks, that's the shape of the bug to look for.
 
 ## Known risks to keep front of mind
 
