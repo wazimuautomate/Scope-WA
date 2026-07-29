@@ -6,6 +6,59 @@ merged PR, newest first within each release. Format loosely follows
 
 ## [Unreleased]
 
+### Changed — Integration for 1.0.0: Phases 3–7 + reply listener + release hardening
+
+Six approved branches merged into one tree. Each was green on its own; the
+entries below are the things that were only decidable once they sat together.
+
+- **Room lands on version 2, with schema export on and no destructive
+  fallback.** The two last branches disagreed in a way that a clean merge would
+  have hidden: pre-release hardening set `version = 1` / `exportSchema = true`
+  and deleted `fallbackToDestructiveMigration()`, while the reply listener set
+  `version = 2` / `exportSchema = false` and kept the fallback. Taking either
+  side wholesale ships a wipe or a crash. The end state is `version = 2`,
+  `exportSchema = true`, no fallback, and a hand-written
+  `data/db/migration/MIGRATION_1_2` registered with `.addMigrations(...)`.
+- **That migration is wider than the reply listener**, deliberately. The
+  committed `1.json` was exported by CI *before* Phases 4 and 7 merged, so it is
+  the only definition of "version 1" that exists — and it is missing
+  `extractions.reported_member_count` / `imported_count` and eighteen
+  `group_add_jobs` columns plus two indices as well as the three reply columns.
+  A migration covering only the reply columns would have passed review and then
+  thrown `IllegalStateException` on the first launch after update, because Room
+  validates the whole post-migration schema against the entity hash. `1.json`
+  stays committed alongside `2.json`; a migration you cannot test from its
+  starting schema is not a migration.
+- **The bottom bar is five items again, and nothing was dropped.** Phases 4, 6
+  and 7 each added a top-level screen and the bar had reached seven — past
+  Material's 3–5 for `NavigationBar` — while Phase 7's **Group Add had no entry
+  at all and nothing else linked to it**, so a finished screen was unreachable.
+  Home / Contacts / Templates / Campaign keep their tabs; Extract, Group Add,
+  Activity log, Setup & permissions and Diagnostics moved behind a **More** tab
+  (`ui/more/MoreScreen.kt`), which stays lit while you are on one of them.
+- `ScopeWaNavHost`, `ScopeWaDestinations`, `AndroidManifest.xml`, `CampaignDao`
+  and `ScopeWaDatabase` are the union of every branch: every route, every
+  service registration, every DAO accessor and every entity, each declared once.
+  The Phase 6 and Phase 7 `ComingSoonScreen` placeholders are gone now that both
+  screens exist.
+
+### Fixed — the release pipeline, before it ships rather than after
+
+- **`update.json` pointed at a filename that would never exist.**
+  `release.yml` advertised `.../releases/download/v<version>/scope-wa.apk` but
+  uploaded whatever AGP produced, i.e. `app-release.apk`, so the in-app
+  `UpdateChecker` would have 404'd on the very first update check. The workflow
+  now **renames the APK to `scope-wa.apk`** before uploading, rather than
+  correcting the URL — that URL is baked into every installed client the moment
+  1.0.0 goes out, and a shipped updater cannot be told to look somewhere else.
+- **Nothing verified the release APK was actually signed.** With the four
+  signing secrets absent the workflow builds unsigned and skips publishing,
+  which is intended; but a *misconfigured* keystore could still publish an
+  unsigned APK under a `v1.0.0` tag that Android refuses to install and that
+  cannot be re-tagged. `release.yml` now runs `apksigner verify` on the APK,
+  gated on `steps.signing.outputs.configured == 'true'`, and fails the job if
+  the signature is missing.
+
 ### Changed — Phase 4 follow-up: capture every group member by default
 
 - `ExtractionFilters.excludeWithoutNumbers` now defaults to **false**. The

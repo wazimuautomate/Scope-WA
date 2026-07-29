@@ -15,6 +15,7 @@ import com.tricreta.scopewa.ui.contacts.contactsGraph
 import com.tricreta.scopewa.ui.extract.ExtractScreen
 import com.tricreta.scopewa.ui.groupadd.groupAddGraph
 import com.tricreta.scopewa.ui.home.HomeScreen
+import com.tricreta.scopewa.ui.more.MoreScreen
 import com.tricreta.scopewa.ui.settings.DiagnosticsScreen
 import com.tricreta.scopewa.ui.settings.SetupScreen
 import com.tricreta.scopewa.ui.templates.TemplateEditorScreen
@@ -78,5 +79,13 @@ fun ScopeWaNavHost(
         // section 7. Pacing profiles, active hours, caps, and warm-up state
         // join it in Phase 5, when there is a campaign for them to govern.
         composable(ScopeWaDestination.Settings.route) { SetupScreen() }
+
+        // The overflow half of the bottom bar. Everything that does not fit on a
+        // five-item NavigationBar is reachable from here — see ScopeWaBottomBar.
+        composable(ScopeWaDestination.More.route) {
+            MoreScreen(
+                onOpen = { destination -> navController.navigate(destination.route) }
+            )
+        }
     }
 }
