@@ -24,7 +24,7 @@ class TemplateListViewModel(private val repository: TemplateRepository) : ViewMo
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
 
     private fun TemplateEntity.toListItem(): TemplateListItem {
-        val known = TemplateEntity.decodeVariables(knownVariables)
+        val known = knownVariables
             .ifEmpty { TemplateVariables.defaultKnownNames }
             .map { it.lowercase() }
             .toSet()

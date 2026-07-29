@@ -44,8 +44,7 @@ import com.tricreta.scopewa.ui.theme.ScopeGreen
 fun HomeScreen(
     modifier: Modifier = Modifier,
     onOpenSetup: () -> Unit = {},
-    onOpenDiagnostics: () -> Unit = {},
-    onOpenTemplates: () -> Unit = {}
+    onOpenDiagnostics: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val serviceConnected by WaServiceBridge.isConnected.collectAsState()
@@ -90,14 +89,10 @@ fun HomeScreen(
 
         OutlinedButton(onClick = onOpenDiagnostics) { Text("Diagnostics") }
 
-        // Templates (Phase 3) needs no Accessibility permission — writing and
-        // previewing a message works before setup is finished.
-        OutlinedButton(onClick = onOpenTemplates) { Text("Templates") }
-
         Spacer(Modifier.height(8.dp))
 
         Text(
-            text = "Contacts and campaigns arrive in later phases — " +
+            text = "Contacts, templates, and campaigns arrive in later phases — " +
                 "see docs/BUILD-PLAN.md.",
             style = MaterialTheme.typography.bodyLarge
         )

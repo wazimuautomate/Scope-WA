@@ -32,45 +32,37 @@ class TemplateRepository(
         knownVariables: List<String>
     ): Long {
         val timestamp = now()
-        val encoded = TemplateEntity.encodeVariables(knownVariables)
+        val cleanedVariables = knownVariables.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
 
-        if (id == TemplateEntity.NEW_TEMPLATE_ID) {
+        val existing = if (id == TemplateEntity.NEW_TEMPLATE_ID) null else dao.findById(id)
+
+        if (existing == null) {
             return dao.insert(
                 TemplateEntity(
                     name = name,
                     body = body,
-                    knownVariables = encoded,
+                    knownVariables = cleanedVariables,
                     createdAt = timestamp,
                     updatedAt = timestamp
                 )
             )
         }
 
-        val existing = dao.findById(id) ?: return dao.insert(
-            TemplateEntity(
-                name = name,
-                body = body,
-                knownVariables = encoded,
-                createdAt = timestamp,
-                updatedAt = timestamp
-            )
-        )
-
         dao.update(
             existing.copy(
                 name = name,
                 body = body,
-                knownVariables = encoded,
+                knownVariables = cleanedVariables,
                 updatedAt = timestamp
             )
         )
-        return id
+        return existing.id
     }
 
     suspend fun delete(id: Long) = dao.deleteById(id)
 
     companion object {
         fun from(context: Context): TemplateRepository =
-            TemplateRepository(ScopeWaDatabase.getInstance(context).templateDao())
+            TemplateRepository(ScopeWaDatabase.get(context).templateDao())
     }
 }
