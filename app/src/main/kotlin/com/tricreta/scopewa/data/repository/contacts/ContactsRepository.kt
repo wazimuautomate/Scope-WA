@@ -134,8 +134,17 @@ class ContactsRepository(
      * Applies a plan: inserts the new contacts, fills in blanks on the ones we
      * already had, and — if [listId] is given — adds everything importable to
      * that list. Suppressed numbers are not written and not listed.
+     *
+     * @param sourceGroup the WhatsApp group these contacts were extracted from,
+     *   recorded on newly inserted rows. Populates
+     *   [ContactEntity.sourceGroup] for Phase 4's extractor; file imports leave
+     *   it null.
      */
-    suspend fun applyImport(plan: ImportPlan, listId: Long? = null): ImportResult {
+    suspend fun applyImport(
+        plan: ImportPlan,
+        listId: Long? = null,
+        sourceGroup: String? = null
+    ): ImportResult {
         if (plan.isEmpty) {
             return ImportResult(plan, inserted = 0, updated = 0, addedToList = 0)
         }
@@ -152,6 +161,7 @@ class ContactsRepository(
                             phoneE164 = candidate.phoneE164,
                             rawNumber = candidate.rawNumber,
                             displayName = candidate.name,
+                            sourceGroup = sourceGroup,
                             customFields = candidate.fields,
                             createdAt = timestamp,
                             updatedAt = timestamp
@@ -196,6 +206,16 @@ class ContactsRepository(
 
     private suspend fun idsForNumbers(numbers: List<String>): List<Long> =
         numbers.chunked(CHUNK).flatMap { contactDao.byNumbers(it) }.map { it.id }
+
+    /**
+     * Every number already in the database, normalised.
+     *
+     * Used by Phase 4's "exclude already-saved" extraction filter: pulling a
+     * group is for harvesting numbers the user does *not* have, so the ones
+     * they do have are worth filtering out before export.
+     */
+    suspend fun knownNumbers(): Set<String> =
+        contactDao.all().mapTo(mutableSetOf()) { it.phoneE164 }
 
     // ---- opt-out and suppression ------------------------------------------
 

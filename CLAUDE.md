@@ -37,8 +37,72 @@ Everything after that follows the rule above.
 
 Before opening any PR:
 - CI (`ci.yml`) must be green — unit tests + debug build.
+- **The phase has been run on the emulator** (see below) with screenshots of
+  what you built. "It compiles" is not evidence that it works.
 - `CHANGELOG.md` has a new entry under `[Unreleased]` describing what changed and why.
 - `MEMORY.md` reflects the new state (phase status, open questions, decisions made).
+
+## Emulator testing — required at the end of every phase
+
+There is a working Android emulator on this machine. **Every phase must be
+run on it before its PR is opened**, and the PR must say what was observed,
+with screenshots. Compiling is not the same as working — Phase 1 shipped a
+readiness check that CI was perfectly happy with and that only the emulator
+could actually exercise.
+
+```
+SDK       C:\Users\ADMIN\AppData\Local\Android\Sdk
+adb       %SDK%\platform-tools\adb.exe
+emulator  %SDK%\emulator\emulator.exe
+AVD       scope_test   (Android 11, API 30, x86_64)
+```
+
+There is **no local JDK**, so you cannot build locally. The loop is:
+
+```powershell
+$adb = "C:\Users\ADMIN\AppData\Local\Android\Sdk\platform-tools\adb.exe"
+# 1. push your branch, let CI build it, then grab the APK it produced
+$run = gh run list --repo wazimuautomate/Scope-WA --branch <your-branch> `
+        --workflow CI --status success --limit 1 --json databaseId --jq '.[0].databaseId'
+gh run download $run --repo wazimuautomate/Scope-WA --dir <dir>
+# 2. install (uninstall first — CI's debug keystore differs from any local one)
+& $adb uninstall com.tricreta.scopewa.debug
+& $adb install -r <dir>\scope-wa-debug\app-debug.apk
+# 3. drive it
+& $adb shell am start -n com.tricreta.scopewa.debug/com.tricreta.scopewa.MainActivity
+& $adb exec-out screencap -p > shot.png
+```
+
+Note the debug build's application id is `com.tricreta.scopewa.debug`
+(`applicationIdSuffix`), while class names keep the `com.tricreta.scopewa`
+package — so the accessibility service component is
+`com.tricreta.scopewa.debug/com.tricreta.scopewa.accessibility.WaAccessibilityService`.
+
+Enabling the accessibility service without tapping through Settings:
+
+```powershell
+& $adb shell settings put secure enabled_accessibility_services `
+    com.tricreta.scopewa.debug/com.tricreta.scopewa.accessibility.WaAccessibilityService
+& $adb shell settings put secure accessibility_enabled 1
+& $adb logcat -d -s WaAccessibility:*      # expect "Accessibility service connected"
+```
+
+### Two limits to be honest about
+
+1. **WhatsApp is not installed on the emulator and realistically cannot be.**
+   Registration needs a real number and an SMS code. So the emulator verifies
+   *our* app — screens, navigation, database, the service binding, readiness
+   logic — but **cannot verify any actual WhatsApp automation.** Anything
+   under `accessibility/` that drives WhatsApp still needs the client's real
+   handset. Do not claim a WhatsApp interaction works because the emulator was
+   happy; say exactly which half you exercised.
+2. **The emulator is a shared, single instance.** When several phase sessions
+   run at once they fight over it — one session's `uiautomator` polling or
+   `am force-stop` will reset another's accessibility settings and kill its
+   app mid-test, which reads as a phantom bug. Before trusting a surprising
+   result, check whether someone else is driving the device:
+   `& $adb logcat -d | Select-String uiautomator`. If so, either wait or
+   create a second AVD.
 
 ## Memory and changelog discipline
 
@@ -76,5 +140,6 @@ done, not just when explicitly asked.
   Don't add Play Store publishing config; it was rejected as a strategy for
   the reasons in architecture doc section 4.
 - Real device testing (anything under `accessibility/`) can't be fully
-  verified by CI. Say explicitly in a PR what was tested on-device versus
-  only compiled.
+  verified by CI **or by the emulator**, which has no WhatsApp. Say explicitly
+  in a PR what was tested on the emulator, what needs the client's handset,
+  and what was only compiled.

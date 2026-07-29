@@ -8,6 +8,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.tricreta.scopewa.ui.common.ComingSoonScreen
 import com.tricreta.scopewa.ui.contacts.contactsGraph
+import com.tricreta.scopewa.ui.extract.ExtractScreen
 import com.tricreta.scopewa.ui.home.HomeScreen
 import com.tricreta.scopewa.ui.settings.DiagnosticsScreen
 import com.tricreta.scopewa.ui.settings.SetupScreen
@@ -35,9 +36,8 @@ fun ScopeWaNavHost(
         // Phase 2 — lists, import, picker and export all live under `contacts/`.
         contactsGraph(navController)
 
-        composable(ScopeWaDestination.Extract.route) {
-            ComingSoonScreen("Extract", "Lands in Phase 4 — see architecture doc section 9.")
-        }
+        // Phase 4 — reads a group's participants through the accessibility service.
+        composable(ScopeWaDestination.Extract.route) { ExtractScreen() }
         composable(ScopeWaDestination.Templates.route) {
             ComingSoonScreen("Templates", "Lands in Phase 3 — see architecture doc section 9.")
         }
