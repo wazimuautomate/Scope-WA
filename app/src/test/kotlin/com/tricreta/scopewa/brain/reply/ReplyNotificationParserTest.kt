@@ -17,7 +17,7 @@ import org.junit.Test
 class ReplyNotificationParserTest {
 
     private fun notification(
-        packageName: String = WaSelectors.PACKAGE_WHATSAPP,
+        packageName: String? = WaSelectors.PACKAGE_WHATSAPP,
         title: String? = "Mama Njeri",
         text: String? = "Nataka bundles mbili",
         subText: String? = null,
