@@ -32,8 +32,7 @@ fun ScopeWaNavHost(
         composable(ScopeWaDestination.Home.route) {
             HomeScreen(
                 onOpenSetup = { navController.navigate(ScopeWaDestination.Setup.route) },
-                onOpenDiagnostics = { navController.navigate(ScopeWaDestination.Diagnostics.route) },
-                onOpenTemplates = { navController.navigate(ScopeWaDestination.Templates.route) }
+                onOpenDiagnostics = { navController.navigate(ScopeWaDestination.Diagnostics.route) }
             )
         }
 
