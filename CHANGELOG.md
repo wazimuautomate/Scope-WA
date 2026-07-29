@@ -6,6 +6,59 @@ merged PR, newest first within each release. Format loosely follows
 
 ## [Unreleased]
 
+### Added — Phase 1: Accessibility Service + permission walkthrough
+
+- **`WaSelectors` rewritten as ordered fallback candidates** for both
+  `com.whatsapp` and `com.whatsapp.w4b`, covering the compose box, send
+  button, conversation title, participant list, and add-participant search,
+  plus text fragments for WhatsApp's restriction and privacy-blocked dialogs.
+  Kept free of Android imports so its matching rules are unit tested in CI.
+- **`NodeFinder`** — walks accessibility node trees trying view-ids first,
+  then content-descriptions, then visible text, and reports *which* candidate
+  matched so a stale selector is diagnosable rather than merely broken.
+- **`WaScreenDump` + Diagnostics screen** — captures a live WhatsApp screen on
+  a 10-second delay (the user needs time to switch apps) and renders it as
+  shareable text, with a per-selector found/not-found report on top. This is
+  what makes architecture doc section 8's "a break is a small patch" promise
+  real: repairing a selector no longer needs a laptop and `uiautomatorviewer`.
+- **`WaProbe`** — the Phase 1 acceptance test from architecture doc section 9.
+  Opens WhatsApp through the documented `wa.me` deep link and confirms the
+  service can read the compose box. Never touches the send button, and uses a
+  reserved example number so it cannot reach a real person.
+- **`ProbeResultPresenter`** — turns each probe outcome into a headline, an
+  explanation, and a next step. Unit tested, because this is the client's only
+  feedback when setup fails; notably it distinguishes "permission is broken"
+  from "permission works, WhatsApp changed its layout", which need opposite fixes.
+- **Guided setup walkthrough** (`ui/settings/SetupScreen`) — ordered steps for
+  choosing the WhatsApp variant, granting Accessibility, and exempting the app
+  from battery optimisation. Includes the **Android 13+ restricted-settings
+  step**, which greys out the Accessibility toggle for sideloaded apps; since
+  Scope WA ships as a direct-install APK (architecture doc section 4), skipping
+  this would make the app look broken on the client's newer phones.
+- **`WaServiceBridge`** — observable connection state, distinguishing "enabled
+  in Android Settings" from "actually bound and able to read screens".
+- **`WaDeepLink`** (in `brain/`) — pure `wa.me` URL builder, unit tested.
+- **HomeScreen** now shows live readiness instead of a static placeholder.
+
+### Fixed — Phase 1
+
+- **CI never ran on phase branches.** `ci.yml` triggered only on pushes to
+  `main`/`features` and PRs into `main`, but `CLAUDE.md` requires green CI
+  *before* a phase branch opens a PR into `features` — so the gate the branch
+  policy depends on did not exist, and a PR into `features` ran no checks at
+  all. Now runs on every branch and on PRs into both integration branches.
+  This blocked Phases 2 and 3 equally.
+- CI keeps the HTML test report as an artifact when tests fail.
+
+### Known limitations — Phase 1
+
+- **The WhatsApp view-ids in `WaSelectors` are researched candidates, not
+  device-verified.** They have not been confirmed against the client's handsets
+  or WhatsApp versions. The ordered-fallback design means a wrong guess
+  degrades to the next candidate, and the Diagnostics screen exists to capture
+  the real values — but until someone runs the probe on a real phone, Phase 1's
+  acceptance criterion is not met. See `MEMORY.md`.
+
 ### Added — Phase 2: Contacts
 
 - **Room schema.** All eight tables from architecture doc section 5.3 are
@@ -47,12 +100,8 @@ merged PR, newest first within each release. Format loosely follows
   and Home had no links — the Contacts screens were otherwise unreachable.
   Deliberately throwaway; Phase 1 should replace it when Home lands.
 
-### Changed
+### Changed — Phase 2
 
-- `ci.yml` now also runs on pull requests into `features`, and can be triggered
-  manually. `CLAUDE.md` requires green CI before a phase branch merges into
-  `features`, which the previous `pull_request: branches: [main]` trigger made
-  impossible.
 - Added `androidx.lifecycle:lifecycle-viewmodel-compose` to the version catalog.
 
 ## [0.1.0] — 2026-07-29 — Phase 0: project skeleton

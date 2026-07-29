@@ -1,16 +1,20 @@
 name: CI
 
-# Runs on every push to features/main and every PR into either of them — see
-# CLAUDE.md's branch policy, which requires green CI before a phase branch is
-# merged into `features`. `workflow_dispatch` lets a phase branch be checked
-# before its PR is opened. No local Android Studio is required; this pipeline is
-# the only thing that has to build the app (architecture doc section 4).
+# Runs on every branch and on PRs into both integration branches.
+#
+# CLAUDE.md requires CI to be green *before* a phase branch opens a PR into
+# `features`, and phases are built in parallel by separate sessions. Limiting
+# triggers to main/features would mean a phase branch got no CI at all until
+# its PR was already open, and a PR into `features` would never run checks —
+# so the gate the branch policy depends on would not exist.
+#
+# No local Android Studio is required; this pipeline is the only thing that
+# has to build the app (architecture doc section 4).
 on:
   push:
-    branches: [main, features]
+    branches: ["**"]
   pull_request:
     branches: [main, features]
-  workflow_dispatch:
 
 jobs:
   build-and-test:
@@ -32,18 +36,18 @@ jobs:
         with:
           gradle-version: "8.9"
 
-      - name: Unit test the pure-Kotlin layers
+      - name: Unit test the brain layer
         run: gradle testDebugUnitTest --stacktrace
 
-      # Uploaded even when the tests fail — that's when the report is worth
-      # having, and there's no local Android Studio to reproduce a failure in.
-      - name: Upload unit test report
-        if: always()
+      # Gradle prints per-test detail only on failure, and the console log is
+      # awkward to read across parallel phase branches. Keep the HTML report.
+      - name: Upload test report
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: unit-test-report
-          path: app/build/reports/tests/testDebugUnitTest
-          retention-days: 14
+          name: test-report-${{ github.ref_name }}
+          path: app/build/reports/tests/testDebugUnitTest/
+          retention-days: 7
 
       - name: Assemble debug APK
         run: gradle assembleDebug --stacktrace

@@ -8,19 +8,44 @@ discipline section. This is not a changelog (that's `CHANGELOG.md`); it's
 
 **Phase 0 — done.** Project skeleton, CI, git repo, and governance docs.
 
+**Phase 1 — code complete, NOT device-verified.** Accessibility service,
+node finding, selector capture tooling, the WhatsApp probe, and the guided
+permission walkthrough are all built and CI-green (branch
+`phase-1-accessibility`).
+
+> ⚠️ **Phase 1's acceptance criterion is not yet met.** `docs/BUILD-PLAN.md`
+> requires it to work "on a real phone", and nothing here has touched one.
+> The WhatsApp view-ids in `accessibility/WaSelectors.kt` are researched
+> candidates, not captured from a device — they may simply be wrong. **Do not
+> treat Phase 1 as done, and do not start Phase 4, 5, or 7, until someone runs
+> the in-app test on a real handset.** See "What Phase 1 still needs" below.
+
 **Phase 2 (Contacts) — built on `phase-2-contacts`, PR open into `features`
-(2026-07-29).** Room schema (all ten tables), CSV/VCF/TXT import with dedupe
-and a confirm-before-you-write preview, lists + bulk-select picker,
-CSV/TXT/VCF/JSON file export, and the `opted_out` + suppression plumbing Phase 5
-needs for STOP handling. Verified by CI only — compile plus unit tests. No
-device test was done and none is needed: Phase 2 touches no Accessibility code.
+(2026-07-29).** Room schema (all ten tables), CSV/VCF/TXT import with dedupe and
+a confirm-before-you-write preview, lists + bulk-select picker, CSV/TXT/VCF/JSON
+file export, and the `opted_out` + suppression plumbing Phase 5 needs for STOP
+handling. Verified by CI only — compile plus 104 unit tests. No device test was
+done and none is needed: Phase 2 touches no Accessibility code. The Compose
+screens are compile-checked but have not been clicked through on a handset.
 
-**Phases 1 and 3 ran in parallel in other sessions** (`phase-3-templates` has
-its own worktree; a session was also editing `accessibility/` and
-`brain/whatsapp/`, i.e. Phase 1). Phase 2 no longer blocks anything.
+**Phase 3 (Templates)** was being built in parallel in another session on
+`phase-3-templates`. Phase 2 blocks nothing any more.
 
-Next up: Phase 4 (extractor) unblocks once Phase 1 lands; Phase 5 needs 1, 2
-and 3. See `docs/BUILD-PLAN.md`.
+## What Phase 1 still needs (a human with the phone, ~10 minutes)
+
+1. Install the debug APK from the CI run on a phone that has WhatsApp.
+2. Open Scope WA → **Finish setup**, work through the steps, grant Accessibility.
+3. Run **Test it**. Then:
+   - **"WhatsApp automation is working"** → Phase 1 is genuinely done. Record
+     the WhatsApp version it reported here, and phases 4/5/7 are unblocked.
+   - **"message box wasn't recognised"** → the permission works but the
+     selectors are wrong, which is the expected outcome if the researched ids
+     are stale. Use **Diagnostics → Start capture**, switch to a WhatsApp chat,
+     share the dump, and correct `WaSelectors.kt` from it. This is a one-line
+     fix per selector, by design.
+4. Repeat on both WhatsApp and WhatsApp Business, and on both a Samsung and a
+   Tecno handset if available — OEM builds differ, and the client uses both
+   (architecture doc section 10, Q4).
 
 ## Key decisions on record
 
@@ -97,6 +122,33 @@ Raised by Phase 2 (2026-07-29), not blocking:
   confirming with him that CSV is the format he'll really use before Phase 4
   spends effort on the other four.
 
+## Things learned while building (don't rediscover these)
+
+- **Android 13+ blocks Accessibility for sideloaded apps.** The toggle appears
+  but is greyed out until the user does App info → ⋮ → *Allow restricted
+  settings*. Scope WA is direct-install by design (architecture doc section 4),
+  so this hits every install on a modern phone. The setup walkthrough covers
+  it; don't remove that step thinking it's redundant.
+- **"Enabled in Settings" ≠ "connected".** The service can be ticked in
+  Android Settings without being bound (briefly after toggling, and after a
+  force-stop on some OEM builds). Readiness checks must use
+  `WaServiceBridge.isConnected`, not the Settings value.
+- **Content-descriptions are localised.** "Type a message" doesn't exist on a
+  Swahili phone. Anything on the critical send path needs a view-id candidate;
+  there's a unit test enforcing this.
+- **`URLEncoder` breaks wa.me links.** It form-encodes spaces as `+`, which
+  WhatsApp renders literally — messages arrive with plus signs between every
+  word. `WaDeepLink` converts to `%20`; there's a test pinning it.
+- **CI didn't run on phase branches** until Phase 1 fixed `ci.yml`. If a
+  branch seems to have no checks, that's the shape of the bug to look for.
+- **Android's own contact export writes quoted-printable.** Any name with an
+  accent or non-Latin character comes out as
+  `N;CHARSET=UTF-8;ENCODING=QUOTED-PRINTABLE:...`. `VcfParser` decodes it; a
+  parser that doesn't will import visible mojibake, not an obvious crash.
+- **Room 2.6's `fallbackToDestructiveMigration()` takes no arguments.** The
+  `dropAllTables = true` overload is 2.7+. Easy to write from memory and it
+  fails at compile time, which is at least fast.
+
 ## Known risks to keep front of mind
 
 - Ban risk is reduced, not eliminated, at any volume — this must stay
@@ -121,7 +173,6 @@ Raised by Phase 2 (2026-07-29), not blocking:
   a `git checkout -b` moved the branch out from under another session's
   in-progress edits). Phase 2 and Phase 3 each ran from
   `git worktree add <dir> -b phase-N-<name> origin/features`. Do that.
-- `ci.yml` runs on pushes to `main`/`features`, PRs into either, and
-  `workflow_dispatch`. A push to a `phase-*` branch alone does **not** trigger
-  it — run `gh workflow run ci.yml --ref <branch>` to check a phase branch
-  before opening its PR.
+- `ci.yml` runs on **every** branch push and on PRs into `main`/`features`
+  (Phase 1 fixed this). Pushing a phase branch is enough to get a check;
+  `gh run list --branch <name>` finds it.
