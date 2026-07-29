@@ -57,4 +57,16 @@ object WaServiceBridge {
 
     /** The foreground app's package name, or null when nothing is readable. */
     fun currentWindowPackage(): String? = currentWindowRoot()?.packageName?.toString()
+
+    /**
+     * Presses the system Back button. Added by Phase 7: the group-add flow is
+     * several screens deep inside WhatsApp (chat list → group → group info →
+     * add participants) and, unlike the send path, there is no deep link that
+     * lands on the screen it needs. Backing out is the only way to recover from
+     * a half-finished add without leaving WhatsApp on a dialog.
+     *
+     * Returns false when the service isn't bound or the system refused.
+     */
+    fun pressBack(): Boolean =
+        service?.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK) == true
 }

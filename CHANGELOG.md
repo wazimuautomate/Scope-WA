@@ -6,6 +6,67 @@ merged PR, newest first within each release. Format loosely follows
 
 ## [Unreleased]
 
+### Added — Phase 7: Group adder
+
+The last phase, shipped last on purpose: adding people to groups is the
+highest-risk thing the app does, and it gets its own rules from architecture
+doc section 6 **layer 5** rather than reusing the send-side pacing.
+
+- **The eligibility rule is enforced in code, not by convention.**
+  `brain/groupadd/GroupAddEligibility` will only ever offer people who have
+  **messaged the user before** (`contacts.times_replied > 0`) or who came from
+  a group they already belong to (`contacts.source_group`, which Phase 4's
+  extractor stamps). Everyone else is `Cold` and is refused. Provenance is
+  derived from the contact row, never entered by hand, so the rule can't be
+  talked around.
+- **The refusals are the loudest thing on the screen.** `ui/groupadd/` puts
+  "34 of 200 can be added — 166 are cold numbers" above the fold with the
+  reason spelled out, because a screen that quietly shipped a shorter list than
+  the user picked would leave him believing the rest were added.
+- **Strict pacing, with no profile picker** (`brain/groupadd/GroupAddPacing`):
+  batches of **3**, **60–150s** randomised between adds, **8–15 min**
+  randomised between batches, a daily cap of **20**, and a hard stop after **2**
+  consecutive failures. The daily cap belongs to the phone number, not the job
+  — three group-add jobs in a day share one allowance of 20.
+- **A "needs invite link" bucket that is never retried.** A number blocked by
+  its owner's "who can add me to groups" setting is a terminal outcome, not a
+  transient error (architecture doc section 8: *"not a bug"*). It leaves the
+  queue permanently and the run screen offers the list for sharing, so the
+  client sends an invite link by hand instead of retrying forever.
+- **`GroupAddPlanner`** lays the whole run out before it starts — ordered
+  batches, drawn delays, drawn cooldowns, and who the cap defers to tomorrow —
+  so the confirmation screen quotes real numbers. It re-screens its input, so a
+  caller that forgets to filter cold numbers still can't add them.
+- **`accessibility/WaGroupAdder`** mirrors `WaSender`'s shape: open the group,
+  open group info, Add participants, search, tap, confirm — then **verify
+  against the participant count** rather than assuming. Classifies WhatsApp's
+  privacy-block and already-a-member dialogs, and backs out to a known screen
+  after any failure so the *next* person in the batch isn't doomed too.
+- **`jobrunner/GroupAddJobService`** — its own foreground service, not a mode of
+  `CampaignJobService`: different pacing, different cap, a two-deep failure
+  breaker, and a bucket sending has no equivalent of. Asks the stop gate before
+  every single add, honours pause/resume/stop, holds a wake lock, and writes
+  each result to Room as it happens.
+- **`GroupAddJobEntity` fleshed out + `GroupAddJobDao`.** No new
+  `@Database(entities = [...])` entry — per-person results live on the job row
+  as encoded collections, which is acceptable precisely because the daily cap
+  caps a job at a few dozen people.
+- Routes wired into `ScopeWaNavHost` / `ScopeWaDestinations`, replacing the
+  Group Add "coming soon" placeholder.
+- **New selectors appended to `WaSelectors.kt`** for the six-screen group-add
+  flow, plus a participant-count reader. A new `WaSelectorsTest` case asserts
+  every one of them has a **view-id** candidate, not only a
+  content-description — the existing rule, and it matters more here because the
+  flow is deeper.
+- Unit tests for pacing bounds, the cold-number rule, batching, the daily cap,
+  the stop-after-exactly-two-failures gate (and that a skip is *not* a
+  failure), and that the invite bucket never re-enters the queue.
+
+**Not device tested.** Nothing in this phase has been run against a real
+phone; the group-add selectors are researched candidates and are very likely to
+need correcting from a Diagnostics dump. When it is tested it must be against a
+**disposable test group with test numbers only**.
+
 ### Added — Phase 5: Bulk sender
 
 - **Campaign composer** (`ui/campaign/`) — list + template + pacing profile +
