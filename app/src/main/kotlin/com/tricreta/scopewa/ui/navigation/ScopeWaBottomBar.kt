@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -32,6 +33,7 @@ private enum class BottomDestination(
 ) {
     Home(ScopeWaDestination.Home, Icons.Default.Home),
     Contacts(ScopeWaDestination.Contacts, Icons.Default.Person),
+    Extract(ScopeWaDestination.Extract, Icons.Default.Search),
     Campaign(ScopeWaDestination.Campaign, Icons.Default.Send),
     Templates(ScopeWaDestination.Templates, Icons.AutoMirrored.Filled.List),
     Settings(ScopeWaDestination.Settings, Icons.Default.Settings)
