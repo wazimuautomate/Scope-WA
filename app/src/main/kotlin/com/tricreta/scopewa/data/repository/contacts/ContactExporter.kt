@@ -1,5 +1,7 @@
 package com.tricreta.scopewa.data.repository.contacts
 
+import com.tricreta.scopewa.data.repository.csv.CsvWriter
+
 /**
  * A contact flattened for export. Deliberately decoupled from the Room entity
  * so Phase 4's extraction results (which have no row in `contacts` yet) and
@@ -141,12 +143,8 @@ object ContactExporter {
         return "$slug.${format.extension}"
     }
 
-    private fun csvCell(value: String): String =
-        if (value.any { it == '"' || it == ',' || it == '\r' || it == '\n' }) {
-            "\"" + value.replace("\"", "\"\"") + "\""
-        } else {
-            value
-        }
+    /** Phase 6 extracted the escaping into [CsvWriter] so the activity log shares it. */
+    private fun csvCell(value: String): String = CsvWriter.cell(value)
 
     private fun vcardEscape(value: String): String = value
         .replace("\\", "\\\\")
