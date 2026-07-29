@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -91,7 +92,15 @@ fun TemplateEditorScreen(
         },
         bottomBar = {
             Surface(tonalElevation = 3.dp) {
-                Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                // MainActivity draws edge-to-edge, and Scaffold does not inset a
+                // custom bottomBar for us — without this the Save button sits
+                // underneath the system navigation bar.
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(16.dp)
+                ) {
                     Button(
                         onClick = viewModel::save,
                         enabled = state.canSave,

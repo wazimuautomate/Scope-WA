@@ -121,6 +121,17 @@ a new open question, add it here with the date it came up.
 
 ## Things learned while building (don't rediscover these)
 
+- **Android's regex engine is stricter than the JVM's.** `Regex("\{([^{}]*)}")`
+  compiles on the JVM — so unit tests pass and CI goes green — but Android's
+  ICU-backed engine throws `PatternSyntaxException` on the unescaped `}`. This
+  shipped in `TemplateEngine` from Phase 0 and crashed the app the first time a
+  template screen opened on a device. **Escape both braces**, and treat "CI is
+  green" as no evidence at all about regex literals. Nothing in the JVM test
+  suite can catch this class of bug; only running the APK can.
+- **`Scaffold` does not inset a custom `bottomBar`.** With `enableEdgeToEdge()`
+  in `MainActivity`, a bottom bar needs `Modifier.navigationBarsPadding()` or it
+  renders underneath the system navigation bar.
+
 - **Android 13+ blocks Accessibility for sideloaded apps.** The toggle appears
   but is greyed out until the user does App info → ⋮ → *Allow restricted
   settings*. Scope WA is direct-install by design (architecture doc section 4),
@@ -157,6 +168,18 @@ a new open question, add it here with the date it came up.
   test result comes from GitHub Actions CI. Installing a JDK 17 would be the
   single highest-value local change; until then, expect a push-and-wait loop for
   every compile error.
+- **You can still run the app locally**, and you should. `emulator` and `adb`
+  need no JDK, and there is an AVD called `scope_test` (API 30). Download the
+  debug APK from the CI run (`gh run download <id> -n scope-wa-debug`) and
+  install it. Phase 3 found a crash this way that CI is structurally unable to
+  catch — see the regex note below.
+- **Git Bash rewrites device paths.** `adb shell uiautomator dump /sdcard/ui.xml`
+  silently writes to a Windows path unless `MSYS_NO_PATHCONV=1` is set — but
+  that same variable then breaks local paths passed to `adb install`, which need
+  `cygpath -w`.
+- **The emulator is a shared resource.** Parallel phase sessions install over
+  each other's builds (same `com.tricreta.scopewa.debug` package). Reinstall
+  before trusting what is on screen.
 - `gh` CLI has multiple accounts authenticated locally (`TricretA`,
   `wazimuautomate`, `Wazimu90`); active account must be `wazimuautomate` for
   this repo (`gh auth switch --hostname github.com --user wazimuautomate`).

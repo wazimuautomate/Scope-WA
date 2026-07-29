@@ -56,6 +56,9 @@ merged PR, newest first within each release. Format loosely follows
   since no JVM test can catch it. Found by installing the CI debug APK on an
   emulator.
 
+- The editor's Save bar sat underneath the system navigation bar. `MainActivity`
+  draws edge-to-edge and `Scaffold` does not inset a custom `bottomBar`.
+
 ### Changed
 
 - `ui/home/HomeScreen.kt` gained a "Templates" button alongside Phase 1's
