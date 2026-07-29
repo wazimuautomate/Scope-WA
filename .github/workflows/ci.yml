@@ -1,13 +1,20 @@
 name: CI
 
-# Runs on every push to features/main and every PR into main — see CLAUDE.md's
-# branch policy. No local Android Studio is required; this pipeline is the
-# only thing that has to build the app (architecture doc section 4).
+# Runs on every branch and on PRs into both integration branches.
+#
+# CLAUDE.md requires CI to be green *before* a phase branch opens a PR into
+# `features`, and phases are built in parallel by separate sessions. Limiting
+# triggers to main/features would mean a phase branch got no CI at all until
+# its PR was already open, and a PR into `features` would never run checks —
+# so the gate the branch policy depends on would not exist.
+#
+# No local Android Studio is required; this pipeline is the only thing that
+# has to build the app (architecture doc section 4).
 on:
   push:
-    branches: [main, features]
+    branches: ["**"]
   pull_request:
-    branches: [main]
+    branches: [main, features]
 
 jobs:
   build-and-test:
