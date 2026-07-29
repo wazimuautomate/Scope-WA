@@ -185,6 +185,124 @@ object WaSelectors {
     }
 
     // ---------------------------------------------------------------------
+    // Group adding — Phase 7. Appended, per docs/BUILD-PLAN.md's shared-hotspot
+    // rule ("append, don't restructure").
+    //
+    // ⚠️ **None of these has ever been seen on a real device.** They are
+    // researched candidates drawn from the ids WhatsApp has used publicly and
+    // that community automation projects rely on — the same standing as the
+    // Phase 1 selectors above, and no better. The group-add flow is six screens
+    // deep, so it has more chances to be wrong than the send path does. Capture
+    // the real ids with Diagnostics → Dump WhatsApp screen before trusting any
+    // of it, and expect to correct several.
+    // ---------------------------------------------------------------------
+
+    /** The magnifier on WhatsApp's chat list — the way into finding a group by name. */
+    val MainSearchButton = Selector(
+        name = "chat-list search button",
+        viewIds = listOf("menuitem_search", "search_button"),
+        contentDescriptions = listOf("Search")
+    )
+
+    /** The text field the group name gets typed into, on the chat list or the picker. */
+    val MainSearchField = Selector(
+        name = "chat-list search field",
+        viewIds = listOf("search_src_text", "search_input"),
+        className = "android.widget.EditText"
+    )
+
+    /** A row title in the chat list or a search result list. */
+    val ChatListRowTitle = Selector(
+        name = "chat-list row title",
+        viewIds = listOf("conversations_row_contact_name", "contact_name", "conversation_contact_name")
+    )
+
+    /**
+     * The "Add participants" entry on a group info screen. WhatsApp has shipped
+     * this both as a dedicated button and as the first row of the participant
+     * list, hence the spread of candidates.
+     */
+    val AddParticipantsButton = Selector(
+        name = "add participants button",
+        viewIds = listOf("add_participant_button", "add_participants", "menuitem_add_people", "add_people"),
+        contentDescriptions = listOf("Add participants", "Add members"),
+        texts = listOf("Add participants", "Add members", "Add participant")
+    )
+
+    /** A tappable row in the add-participants search results. */
+    val AddParticipantResultRow = Selector(
+        name = "add-participant result row",
+        viewIds = listOf("contactpicker_row_name", "name", "chat_able_contacts_row_name")
+    )
+
+    /** The tick / Next / OK that commits the selected people to the group. */
+    val AddParticipantConfirm = Selector(
+        name = "add-participant confirm button",
+        viewIds = listOf("ok_btn", "next_btn", "menuitem_confirm", "confirm", "fab"),
+        contentDescriptions = listOf("Next", "Done", "OK", "Add"),
+        texts = listOf("Add", "OK", "Next", "Done")
+    )
+
+    /**
+     * The "N participants" header on a group info screen. Read before and after
+     * an add so success can be *verified* rather than assumed — the same
+     * precedent as [WaSender] waiting for the compose box to clear.
+     */
+    val GroupParticipantCountHeader = Selector(
+        name = "group participant count header",
+        viewIds = listOf("participants_title", "group_participants_title", "participants_search_title")
+    )
+
+    /**
+     * The invite-link offer WhatsApp shows when someone's privacy settings block
+     * being added. Its presence is the strongest signal that this person belongs
+     * in the never-retried invite bucket.
+     */
+    val InviteViaLinkButton = Selector(
+        name = "invite via link button",
+        viewIds = listOf("invite_link_btn", "invite_via_link", "invite_button"),
+        texts = listOf("Invite to group via link", "Send invite link", "Invite via link")
+    )
+
+    /** The button that dismisses a WhatsApp dialog without acting on it. */
+    val DialogDismissButton = Selector(
+        name = "dialog dismiss button",
+        viewIds = listOf("cancel_btn", "ok_btn", "button1", "button2"),
+        texts = listOf("OK", "Cancel", "Not now", "Dismiss")
+    )
+
+    /**
+     * Pulls "12" out of "12 participants".
+     *
+     * Written with `\d+` rather than a `{1,5}` quantifier on purpose. Android's
+     * ICU-backed regex engine is stricter than the JVM's about braces and CI
+     * cannot catch the difference (`MEMORY.md`, "things learned while
+     * building"); a pattern with no braces in it at all cannot trip over that.
+     */
+    private val PARTICIPANT_COUNT = Regex("(\\d+)\\s*(participants?|members?)", RegexOption.IGNORE_CASE)
+
+    /**
+     * The participant count anywhere in [visibleText], or null when nothing on
+     * screen says one. Null means "don't know" and must never be read as zero —
+     * an add verified against a guessed count is not verified.
+     */
+    fun participantCountIn(visibleText: String?): Int? {
+        if (visibleText.isNullOrBlank()) return null
+        return PARTICIPANT_COUNT.find(visibleText)?.groupValues?.getOrNull(1)?.toIntOrNull()
+    }
+
+    /**
+     * Fragments meaning "this person is already in the group". Not an error and
+     * not a failure — it must not feed the two-consecutive-failure breaker.
+     */
+    val ALREADY_MEMBER_TEXT_FRAGMENTS = listOf(
+        "already in this group",
+        "already a participant",
+        "is already in",
+        "already added"
+    )
+
+    // ---------------------------------------------------------------------
     // Restriction / warning dialogs — these feed the circuit breaker
     // (architecture doc section 6, layer 4). Text-based by necessity: WhatsApp
     // renders these as generic dialogs with no distinguishing view-id, so

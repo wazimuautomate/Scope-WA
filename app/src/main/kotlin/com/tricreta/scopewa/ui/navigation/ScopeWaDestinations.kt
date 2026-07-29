@@ -13,6 +13,10 @@ enum class ScopeWaDestination(val route: String, val label: String) {
     Campaign("campaign", "Campaign"),
     Running("running", "Running"),
     GroupAdd("group_add", "Group Add"),
+
+    /** Phase 7: live progress for one group-add job. */
+    GroupAddRunning("group_add_running", "Group Add"),
+
     ActivityLog("activity_log", "Activity log"),
     Settings("settings", "Settings"),
 

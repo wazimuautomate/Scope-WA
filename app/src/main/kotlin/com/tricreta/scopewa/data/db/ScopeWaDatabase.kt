@@ -9,6 +9,7 @@ import com.tricreta.scopewa.data.db.dao.CampaignDao
 import com.tricreta.scopewa.data.db.dao.ContactDao
 import com.tricreta.scopewa.data.db.dao.ContactListDao
 import com.tricreta.scopewa.data.db.dao.ExtractionDao
+import com.tricreta.scopewa.data.db.dao.GroupAddJobDao
 import com.tricreta.scopewa.data.db.dao.SuppressionDao
 import com.tricreta.scopewa.data.db.dao.TemplateDao
 import com.tricreta.scopewa.data.db.entity.CampaignEntity
@@ -73,6 +74,7 @@ abstract class ScopeWaDatabase : RoomDatabase() {
     abstract fun templateDao(): TemplateDao
     abstract fun extractionDao(): ExtractionDao
     abstract fun campaignDao(): CampaignDao
+    abstract fun groupAddJobDao(): GroupAddJobDao
 
     companion object {
         private const val NAME = "scope_wa.db"

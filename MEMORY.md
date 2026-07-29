@@ -18,7 +18,7 @@ parallel sessions, which is why several say "code complete, not verified".
 | 4 — Group extractor | Code complete, merged with `features`, PR #5 open. **WhatsApp side not device-verified.** |
 | 5 — Bulk sender | Code complete, PR into `features`. **Not device-verified.** |
 | 6 — Activity log / reports | Code complete, PR into `features`. **Not device-verified**, and never compiled locally — CI is its first compile. |
-| 7 — Group adder | Not started, ships last on purpose |
+| 7 — Group adder | Code complete, PR into `features`. **Not device-verified.** |
 
 > ⚠️ **One handset test gates everything that touches WhatsApp.** The view-ids
 > in `accessibility/WaSelectors.kt` are researched candidates that have never
@@ -122,7 +122,62 @@ meanwhile). The extract route sits alongside the campaign route in the nav host
 and the bottom bar; `ScopeWaDatabase` carries `templateDao()`, `extractionDao()`
 and `campaignDao()` together.
 
+### Phase 7 specifics
+
+Eligibility screening, pacing/planner, the accessibility routine, the
+foreground service and both screens are built. Its BUILD-PLAN acceptance
+criterion — "a manual device test against a disposable test group with test
+numbers only" — is **not** met, and must never be run against the client's real
+groups without his explicit consent.
+
+The group-add selectors in `WaSelectors.kt` are the *least* verified in the
+file. The flow is six screens deep (chat list → search → group → group info →
+add participants → confirm) versus the send path's one, so it has six times the
+surface for a wrong id. Expect to correct several from a Diagnostics dump.
+
+`WaGroupAdder` types into WhatsApp's search fields with `ACTION_SET_TEXT`.
+`WaSender` deliberately avoids that by prefilling through `wa.me`; there is no
+equivalent URL for "open group X's add-participants screen", so there was no
+choice. It is the most fragile thing in the phase.
+
 ## Key decisions on record
+
+- **Group-add eligibility is enforced in code and derived from the contact
+  row, never entered by hand.** A contact is addable only if
+  `times_replied > 0` (they messaged first) or `source_group` is set (Phase 4
+  extracted them from a group they already belong to). Everything else is
+  `Cold` and refused, and `GroupAddPlanner` re-screens its own input so a
+  caller that forgets to filter still can't add cold numbers. Architecture doc
+  section 6 layer 5 — the rule the client's browser extension doesn't have.
+- **The "needs invite link" bucket is terminal, not a retry queue.** A number
+  blocked by its owner's group-privacy setting leaves the queue permanently
+  (`GroupAddOutcome.isRetryable == false`); the UI offers the list for sharing
+  so the client sends a link by hand. Architecture doc section 8 calls this
+  "not a bug", and treating it as a failure to retry would burn the daily cap
+  on people who can never be added.
+- **A privacy block and a skip are neither of them failures.** Only
+  `GroupAddBucket.Failed` outcomes feed the two-consecutive-failure breaker.
+  Same reasoning as the send side, but it bites harder here because the
+  group-add breaker is two deep instead of three.
+- **Group-add pacing constants live in `brain/groupadd/GroupAddPacing`, not in
+  `brain/pacing/`.** `brain/pacing/` holds the Safe/Normal/Fast *profiles* the
+  user chooses between; layer 5's numbers are not a profile and there is
+  deliberately no picker for them. `GroupAddPacingTest` asserts the literals
+  (3, 60, 150, 8, 15, 20, 2) rather than reading the constants back, so
+  loosening one fails CI instead of quietly changing the product.
+- **Phase 7 added no `@Database(entities = [...])` entry.** There is no
+  `group_add_targets` table; per-person results live on the `group_add_jobs`
+  row as encoded `List<String>` / `Map<String, String>` columns. Acceptable
+  only because the daily cap of 20 caps a job at a few dozen people — do not
+  copy this shape for anything unbounded.
+- **`GroupAddJobService` is a separate service from `CampaignJobService`, not a
+  mode of it.** They share a shape but almost no rules; folding them together
+  would mean a flag on each difference, and the flag that gets set wrong is the
+  one that adds 20 cold numbers to a group.
+- **`WaServiceBridge.pressBack()` was added by Phase 7.** The group-add flow has
+  no deep link to re-enter on, so backing out is the only way to recover from a
+  half-finished add without stranding WhatsApp on a dialog — which would doom
+  the next person in the batch, and the breaker is only two deep.
 
 - **Separate app, not a v2 of the existing SMS/M-Pesa app.** Different risk
   profile (Accessibility Service permission, WhatsApp UI churn) and must

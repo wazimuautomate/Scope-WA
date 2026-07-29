@@ -57,6 +57,12 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!-- Phase 7 — the same layer, running section 6 layer 5's stricter rules. -->
+        <service
+            android:name=".jobrunner.GroupAddJobService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
     </application>
 
 </manifest>
