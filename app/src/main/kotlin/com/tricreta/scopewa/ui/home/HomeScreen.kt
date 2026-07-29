@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -14,9 +15,16 @@ import androidx.compose.ui.unit.dp
  * Phase 0 placeholder. Real Home screen (today's counters, warm-up day, active
  * campaign — architecture doc section 7) lands once Phase 1's Accessibility
  * Service test screen is working.
+ *
+ * [onOpenTemplates] is a temporary way in: Phase 3 shipped the Templates
+ * screens before Phase 1 built the real navigation, and an unreachable screen
+ * can't be clicked through on a device. Phase 1 replaces this whole file.
  */
 @Composable
-fun HomeScreen(modifier: Modifier = Modifier) {
+fun HomeScreen(
+    onOpenTemplates: () -> Unit = {},
+    modifier: Modifier = Modifier
+) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -28,5 +36,11 @@ fun HomeScreen(modifier: Modifier = Modifier) {
             text = "Phase 0 skeleton. Next: Accessibility Service walkthrough (Phase 1).",
             style = MaterialTheme.typography.bodyLarge
         )
+        Button(
+            onClick = onOpenTemplates,
+            modifier = Modifier.padding(top = 24.dp)
+        ) {
+            Text("Templates")
+        }
     }
 }

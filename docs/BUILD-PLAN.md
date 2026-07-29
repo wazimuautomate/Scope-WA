@@ -33,6 +33,22 @@ unit tested** — reuse them, don't reimplement:
 - `brain/pacing/PacingPlanner.kt` — Safe/Normal/Fast profiles, randomised delays
 - `brain/safety/CircuitBreaker.kt` — the five auto-pause conditions
 
+**Phase 3 — built** (2026-07-29, branch `phase-3-templates`). Template list and
+editor, variable chips, spintax starters, live preview, uniqueness meter, plus
+three more unit-tested pure-Kotlin pieces to reuse rather than reimplement:
+
+- `brain/template/TemplateAnalyzer.kt` — block classification, spintax
+  combination counts, seeded previews, campaign uniqueness estimates
+- `brain/template/TemplateVariables.kt` — the variable catalogue and its
+  clock-derived values
+- `brain/uniqueness/UniquenessSummary.kt` — the meter's exact wording
+
+**Phase 3 also landed the Room database**, ahead of Phase 2. Per the
+shared-hotspot rule below, all eight tables from architecture doc section 5.3
+are already declared in `data/db/ScopeWaDatabase.kt`; seven are one-line shells
+in `data/db/entity/Shells.kt`. **Phases 2, 4, 5, 6 and 7: fill in your own shell
+entity and add its DAO — do not add entries to `@Database(entities = [...])`.**
+
 Everything else below is unbuilt.
 
 ## Dependency graph

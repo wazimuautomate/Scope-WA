@@ -6,13 +6,49 @@ discipline section. This is not a changelog (that's `CHANGELOG.md`); it's
 
 ## Current phase
 
-**Phase 0 — done.** Project skeleton, CI, git repo, and governance docs are
-in place. No phase-1-through-7 work has started yet.
+**Phase 0 — done.** Project skeleton, CI, git repo, and governance docs.
 
-Next up: Phases 1 (Accessibility Service), 2 (Contacts), and 3 (Templates)
-can all start in parallel — see `docs/BUILD-PLAN.md` for scope and file
-ownership per phase. Phase 1 needs a physical Android device and is the long
-pole; start it first even though it doesn't block 2 or 3.
+**Phase 3 (Templates) — built, on branch `phase-3-templates`, PR into
+`features`** (2026-07-29). Template list + editor, variable chips, spintax
+starters, live preview cycling 5 renders, uniqueness meter in the doc's exact
+wording. New pure-Kotlin `brain/template/TemplateAnalyzer.kt`,
+`brain/template/TemplateVariables.kt` and
+`brain/uniqueness/UniquenessSummary.kt`, all unit tested. Phase 5 consumes
+these; nothing else does yet.
+
+**Phase 4 (Group extractor) — in progress in a parallel session** as of the
+same day, working in `accessibility/WaSelectors.kt`, `accessibility/WaPackage.kt`
+and a new `brain/whatsapp/` package. Note it started ahead of its stated
+dependencies (Phases 1 and 2).
+
+Still unstarted: Phases 1 (Accessibility Service), 2 (Contacts), 5, 6, 7.
+Phase 1 needs a physical Android device and is the long pole.
+
+### Phase 3 decisions Phase 2 and Phase 5 need to know
+
+- **Phase 3 landed the Room database, not Phase 2.** `docs/BUILD-PLAN.md`
+  recommended Phase 2 do it, but its rule is "whoever lands first scaffolds all
+  eight tables" — so `data/db/entity/Shells.kt` holds one-line placeholder
+  entities for the seven tables Phase 3 doesn't own. Filling one in is an
+  additive edit to that entity file; nobody needs to touch
+  `data/db/ScopeWaDatabase.kt`'s `@Database(entities = [...])` list again.
+- **`fallbackToDestructiveMigration()` is deliberate and temporary.** Fine while
+  shells are being filled in and no client data exists on any device; it must
+  become real migrations before the first APK ships.
+- **`TemplateEntity.knownVariables` is load-bearing, not metadata.**
+  `TemplateEngine` decides `{name|there}` means "CSV value, or *there* if blank"
+  — rather than a coin flip between two words — by looking `name` up in that
+  set. Phase 5 must pass the stored list to the engine at send time, or
+  templates render differently than they previewed.
+- **The editor's uniqueness meter is a floor, not a prediction.** It holds CSV
+  values constant and measures spintax variation only, because there is no
+  contact list until Phase 2. Phase 5 must recompute it against the real
+  rendered campaign before sending — that is the number section 6 describes.
+- **`ci.yml` now runs on PRs into `features`.** It previously ran only on PRs
+  into `main`, so `CLAUDE.md`'s "CI green before merging into `features`" rule
+  was unenforceable.
+- **`ui/home/HomeScreen.kt` has a temporary "Templates" button.** Phase 1 owns
+  that file and should drop the button when it builds the real home screen.
 
 ## Key decisions on record
 
@@ -68,9 +104,12 @@ a new open question, add it here with the date it came up.
 
 ## Environment notes
 
-- No local JDK/Gradle/Android SDK detected on this machine as of 2026-07-29
-  — all builds currently go through GitHub Actions CI. If a future session
-  finds local tooling installed, this note is stale; remove it.
+- The Android SDK **is** installed locally (`~/AppData/Local/Android/Sdk`), but
+  there is **no JDK and no Gradle** on this machine as of 2026-07-29, and the
+  repo has no Gradle wrapper. Nothing can be compiled locally — every build and
+  test result comes from GitHub Actions CI. Installing a JDK 17 would be the
+  single highest-value local change; until then, expect a push-and-wait loop for
+  every compile error.
 - `gh` CLI has multiple accounts authenticated locally (`TricretA`,
   `wazimuautomate`, `Wazimu90`); active account must be `wazimuautomate` for
   this repo (`gh auth switch --hostname github.com --user wazimuautomate`).
