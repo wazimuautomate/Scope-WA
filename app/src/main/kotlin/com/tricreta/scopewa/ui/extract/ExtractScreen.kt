@@ -2,6 +2,8 @@ package com.tricreta.scopewa.ui.extract
 
 import android.content.Context
 import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,10 +22,15 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -32,9 +39,11 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.tricreta.scopewa.data.repository.contacts.ExportFormat
 import com.tricreta.scopewa.data.repository.extract.ExtractionFilters
 import com.tricreta.scopewa.data.repository.extract.GroupExtraction
 import com.tricreta.scopewa.data.repository.extract.SaveExtractionResult
+import com.tricreta.scopewa.ui.contacts.ContactFileIo
 import com.tricreta.scopewa.ui.theme.ScopeAmber
 import com.tricreta.scopewa.ui.theme.ScopeGreen
 
@@ -51,81 +60,116 @@ fun ExtractScreen(
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsState()
     val history by viewModel.history.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text("Extract group contacts", style = MaterialTheme.typography.titleLarge)
-
-        if (!state.canExtract) {
-            NotReadyCard(hasWhatsApp = state.installedPackages.isNotEmpty())
+    // Same Storage Access Framework pattern as Phase 2's Contacts export —
+    // architecture doc section 10 Q8: files only, never the phonebook.
+    val saveFile = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("*/*")
+    ) { uri ->
+        val export = state.pendingExport
+        if (uri == null || export == null) {
+            viewModel.exportFinished(null)
+        } else {
+            val written = ContactFileIo.writeText(context, uri, export.content)
+            viewModel.exportFinished(
+                if (written.isSuccess) "Saved ${export.fileName}." else "Couldn't save that file."
+            )
         }
+    }
 
-        HowItWorksCard()
+    LaunchedEffect(state.pendingExport) {
+        state.pendingExport?.let { saveFile.launch(it.fileName) }
+    }
 
-        FiltersCard(
-            filters = state.filters,
-            onChange = viewModel::setFilters,
-            enabled = state.state is ExtractState.Idle
-        )
+    LaunchedEffect(state.message) {
+        state.message?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.messageShown()
+        }
+    }
 
-        when (val current = state.state) {
-            ExtractState.Idle -> {
-                Button(
-                    onClick = { viewModel.startExtraction() },
-                    enabled = state.canExtract
-                ) {
-                    Text("Start 10-second countdown")
-                }
+    Scaffold(
+        modifier = modifier,
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text("Extract group contacts", style = MaterialTheme.typography.titleLarge)
+
+            if (!state.canExtract) {
+                NotReadyCard(hasWhatsApp = state.installedPackages.isNotEmpty())
             }
 
-            is ExtractState.CountingDown -> {
-                Text(
-                    "Switch to the group's info screen now — reading in ${current.secondsLeft}s",
-                    style = MaterialTheme.typography.titleLarge
+            HowItWorksCard()
+
+            FiltersCard(
+                filters = state.filters,
+                onChange = viewModel::setFilters,
+                enabled = state.state is ExtractState.Idle
+            )
+
+            when (val current = state.state) {
+                ExtractState.Idle -> {
+                    Button(
+                        onClick = { viewModel.startExtraction() },
+                        enabled = state.canExtract
+                    ) {
+                        Text("Start 10-second countdown")
+                    }
+                }
+
+                is ExtractState.CountingDown -> {
+                    Text(
+                        "Switch to the group's info screen now — reading in ${current.secondsLeft}s",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                }
+
+                is ExtractState.Reading -> ReadingCard(current)
+
+                is ExtractState.Finished -> FinishedCard(
+                    extraction = current.extraction,
+                    saved = current.saved,
+                    onAgain = { viewModel.reset() },
+                    onExport = { format -> viewModel.exportCurrent(format) }
+                )
+
+                is ExtractState.Failed -> FailedCard(
+                    headline = current.headline,
+                    detail = current.detail,
+                    diagnostics = current.diagnostics,
+                    onAgain = { viewModel.reset() },
+                    onShare = { shareText(context, it) }
                 )
             }
 
-            is ExtractState.Reading -> ReadingCard(current)
-
-            is ExtractState.Finished -> FinishedCard(
-                extraction = current.extraction,
-                saved = current.saved,
-                onAgain = { viewModel.reset() }
-            )
-
-            is ExtractState.Failed -> FailedCard(
-                headline = current.headline,
-                detail = current.detail,
-                diagnostics = current.diagnostics,
-                onAgain = { viewModel.reset() },
-                onShare = { shareText(context, it) }
-            )
-        }
-
-        if (history.isNotEmpty()) {
-            HorizontalDivider()
-            Text("Previous extractions", style = MaterialTheme.typography.titleLarge)
-            history.take(HISTORY_SHOWN).forEach { entry ->
-                Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(12.dp)) {
-                        Text(entry.groupName, style = MaterialTheme.typography.labelLarge)
-                        Text(
-                            "${entry.memberCount} read · ${entry.importedCount} new contacts" +
-                                if (entry.hiddenCount > 0) " · ${entry.hiddenCount} without numbers" else "",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                        if (entry.looksIncomplete) {
+            if (history.isNotEmpty()) {
+                HorizontalDivider()
+                Text("Previous extractions", style = MaterialTheme.typography.titleLarge)
+                history.take(HISTORY_SHOWN).forEach { entry ->
+                    Card(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(12.dp)) {
+                            Text(entry.groupName, style = MaterialTheme.typography.labelLarge)
                             Text(
-                                "WhatsApp reported ${entry.reportedMemberCount} members — " +
-                                    "this run didn't reach them all.",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = ScopeAmber
+                                "${entry.memberCount} read · ${entry.importedCount} new contacts" +
+                                    if (entry.hiddenCount > 0) " · ${entry.hiddenCount} without numbers" else "",
+                                style = MaterialTheme.typography.bodyLarge
                             )
+                            if (entry.looksIncomplete) {
+                                Text(
+                                    "WhatsApp reported ${entry.reportedMemberCount} members — " +
+                                        "this run didn't reach them all.",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = ScopeAmber
+                                )
+                            }
                         }
                     }
                 }
@@ -182,9 +226,12 @@ private fun HowItWorksCard() {
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "Expect fewer numbers than members. WhatsApp only shows a number for people " +
-                    "who aren't already saved on this phone; for everyone else it shows their " +
-                    "name instead, and no number can be read.",
+                "Every member is captured, with a name — but not every member gets a " +
+                    "number. WhatsApp only shows a phone number for people who aren't " +
+                    "already saved on this phone; for everyone else it shows their saved " +
+                    "name instead, and there's no way to recover the number from that. " +
+                    "Those members are still kept and exported, just as name-only rows you " +
+                    "can't message.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = ScopeAmber
             )
@@ -208,7 +255,7 @@ private fun FiltersCard(
                 onChange(filters.copy(excludeSaved = it))
             }
             FilterRow(
-                "Skip members whose number isn't shown",
+                "Skip members with no number (name-only, can't be messaged)",
                 filters.excludeWithoutNumbers,
                 enabled
             ) {
@@ -265,7 +312,8 @@ private fun ReadingCard(state: ExtractState.Reading) {
 private fun FinishedCard(
     extraction: GroupExtraction,
     saved: SaveExtractionResult?,
-    onAgain: () -> Unit
+    onAgain: () -> Unit,
+    onExport: (ExportFormat) -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -291,9 +339,17 @@ private fun FinishedCard(
             saved?.let {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "${it.imported} new contacts saved · ${it.alreadyKnown} already known",
+                    "${it.kept} kept from this group · ${it.imported} saved as messageable " +
+                        "contacts · ${it.alreadyKnown} already known",
                     style = MaterialTheme.typography.bodyLarge
                 )
+                if (it.kept > it.imported + it.alreadyKnown) {
+                    Text(
+                        "The rest have no number to message — they're name-only rows, " +
+                            "included in the export but not written as contacts.",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
             }
 
             if (extraction.looksIncomplete) {
@@ -307,6 +363,18 @@ private fun FinishedCard(
                 )
             }
 
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "Export everyone read above, including name-only rows — the client asked " +
+                    "for a clean CSV file, never the phonebook.",
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { onExport(ExportFormat.Csv) }) { Text("Export CSV") }
+                OutlinedButton(onClick = { onExport(ExportFormat.Vcf) }) { Text("VCF") }
+                OutlinedButton(onClick = { onExport(ExportFormat.Json) }) { Text("JSON") }
+            }
             Spacer(Modifier.height(12.dp))
             Button(onClick = onAgain) { Text("Extract another group") }
         }

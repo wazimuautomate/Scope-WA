@@ -11,11 +11,15 @@ import com.tricreta.scopewa.accessibility.WaServiceBridge
 import com.tricreta.scopewa.accessibility.installedWaPackages
 import com.tricreta.scopewa.data.db.ScopeWaDatabase
 import com.tricreta.scopewa.data.db.entity.ExtractionEntity
+import com.tricreta.scopewa.data.repository.contacts.ContactExporter
 import com.tricreta.scopewa.data.repository.contacts.ContactsRepository
+import com.tricreta.scopewa.data.repository.contacts.ExportFormat
 import com.tricreta.scopewa.data.repository.extract.ExtractionFilters
+import com.tricreta.scopewa.data.repository.extract.ExtractionMerger
 import com.tricreta.scopewa.data.repository.extract.ExtractionRepository
 import com.tricreta.scopewa.data.repository.extract.GroupExtraction
 import com.tricreta.scopewa.data.repository.extract.SaveExtractionResult
+import com.tricreta.scopewa.ui.contacts.PendingExport
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -46,7 +50,9 @@ data class ExtractUiState(
     val installedPackages: List<WaPackage> = emptyList(),
     val filters: ExtractionFilters = ExtractionFilters(),
     val state: ExtractState = ExtractState.Idle,
-    val history: List<ExtractionEntity> = emptyList()
+    val history: List<ExtractionEntity> = emptyList(),
+    val pendingExport: PendingExport? = null,
+    val message: String? = null
 ) {
     val canExtract: Boolean get() = serviceConnected && installedPackages.isNotEmpty()
 }
@@ -175,6 +181,40 @@ class ExtractViewModel(application: Application) : AndroidViewModel(application)
 
     private fun fail(headline: String, detail: String, diagnostics: String? = null) {
         _uiState.update { it.copy(state = ExtractState.Failed(headline, detail, diagnostics)) }
+    }
+
+    /**
+     * Builds the just-finished extraction as a file and hands it to the screen
+     * to route through the system file picker.
+     *
+     * Includes name-only members by default — see [ExtractionRepository.exportMerged]
+     * — because the point of this export is a complete record of who's in the
+     * group, not only the subset with a messageable number.
+     */
+    fun exportCurrent(format: ExportFormat) {
+        val finished = _uiState.value.state as? ExtractState.Finished ?: return
+
+        viewModelScope.launch {
+            val merged = ExtractionMerger.merge(listOf(finished.extraction))
+            val content = repository.exportMerged(merged, format)
+            _uiState.update {
+                it.copy(
+                    pendingExport = PendingExport(
+                        fileName = ContactExporter.fileNameFor(finished.extraction.groupName, format),
+                        mimeType = format.mimeType,
+                        content = content
+                    )
+                )
+            }
+        }
+    }
+
+    fun exportFinished(message: String?) {
+        _uiState.update { it.copy(pendingExport = null, message = message) }
+    }
+
+    fun messageShown() {
+        _uiState.update { it.copy(message = null) }
     }
 
     private companion object {

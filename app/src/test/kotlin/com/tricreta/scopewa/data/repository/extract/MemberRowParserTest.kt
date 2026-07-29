@@ -70,6 +70,27 @@ class MemberRowParserTest {
     }
 
     @Test
+    fun `a title that is only a tilde still gets a non-blank name`() {
+        // Stripping "~" from "~" leaves an empty string — must not hand back a
+        // blank name just because the marker had nothing after it.
+        val member = parser.parse(title = "~")!!
+        assertTrue(member.displayName.isNotBlank())
+    }
+
+    @Test
+    fun `every parsed member has a non-blank display name`() {
+        val cases = listOf(
+            parser.parse(title = "+254712345678"),
+            parser.parse(title = "Brian Otieno", subtitle = "Available"),
+            parser.parse(title = "~Johnny"),
+            parser.parse(title = "~", subtitle = "Available")
+        )
+        cases.forEach { member ->
+            assertTrue("every captured member must have a name to show", member!!.displayName.isNotBlank())
+        }
+    }
+
+    @Test
     fun `a blank row is skipped entirely`() {
         assertNull(parser.parse(title = null))
         assertNull(parser.parse(title = "   "))

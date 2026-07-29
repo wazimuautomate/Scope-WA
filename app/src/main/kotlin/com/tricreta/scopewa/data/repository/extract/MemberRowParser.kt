@@ -79,7 +79,12 @@ class MemberRowParser(
     private fun displayNameFor(title: String, subtitle: String?, number: String?): String {
         val titleIsJustANumber = number != null && extractNumber(title) != null
 
-        if (!titleIsJustANumber) return title.removePrefix("~").trim()
+        if (!titleIsJustANumber) {
+            val stripped = title.removePrefix("~").trim()
+            // A title that was literally just "~" strips to nothing; fall back
+            // to the raw title rather than hand back a blank name.
+            return stripped.ifEmpty { title }
+        }
 
         val pushName = subtitle?.takeIf { it.startsWith("~") }?.removePrefix("~")?.trim()
         return pushName?.takeIf { it.isNotEmpty() } ?: title

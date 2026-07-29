@@ -21,7 +21,10 @@ class ExtractionFilterTest {
     )
 
     @Test
-    fun `by default unreachable members and self are dropped, admins kept`() {
+    fun `by default every member is kept except self — unreachable ones are not dropped`() {
+        // The point of extraction is a complete record of the group. Only the
+        // account running it (self) is excluded automatically; a member with no
+        // readable number is still a real person in the group and is kept.
         val members = listOf(
             member("+254700000001"),
             member(null, "Saved Person"),
@@ -31,8 +34,8 @@ class ExtractionFilterTest {
 
         val outcome = ExtractionFilter.apply(members, ExtractionFilters())
 
-        assertEquals(2, outcome.kept.size)
-        assertEquals(1, outcome.droppedWithoutNumbers)
+        assertEquals(3, outcome.kept.size)
+        assertEquals(0, outcome.droppedWithoutNumbers)
         assertEquals(1, outcome.droppedSelf)
         assertEquals(0, outcome.droppedAdmins)
     }
@@ -68,16 +71,16 @@ class ExtractionFilterTest {
     }
 
     @Test
-    fun `unreachable members can be kept deliberately so counts stay honest`() {
+    fun `excludeWithoutNumbers can be turned on to drop the unreachable ones`() {
         val members = listOf(member("+254700000001"), member(null, "Saved Person"))
 
         val outcome = ExtractionFilter.apply(
             members,
-            ExtractionFilters(excludeWithoutNumbers = false)
+            ExtractionFilters(excludeWithoutNumbers = true)
         )
 
-        assertEquals(2, outcome.kept.size)
-        assertEquals(0, outcome.droppedWithoutNumbers)
+        assertEquals(listOf("+254700000001"), outcome.kept.map { it.phoneE164 })
+        assertEquals(1, outcome.droppedWithoutNumbers)
     }
 
     @Test

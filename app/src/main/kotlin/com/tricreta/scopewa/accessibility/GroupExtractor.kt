@@ -160,14 +160,13 @@ class GroupExtractor(
 
         return nameNodes.mapNotNull { nameNode ->
             val row = nameNode.parent ?: return@mapNotNull null
-            val title = nameNode.text?.toString()
+            val title = labelOf(nameNode)
 
             val subtitle = subtitleIds
                 .firstNotNullOfOrNull { id ->
                     row.findAccessibilityNodeInfosByViewId(id)
                         ?.firstOrNull { it.isVisibleToUser }
-                        ?.text
-                        ?.toString()
+                        ?.let(::labelOf)
                 }
 
             parser.parse(
@@ -177,6 +176,18 @@ class GroupExtractor(
             )
         }
     }
+
+    /**
+     * A node's text, or its content-description when text is blank.
+     *
+     * Some WhatsApp layouts expose a row's label only via content-description.
+     * Falling back to it is the difference between capturing that row and
+     * silently dropping a real group member — see `MEMORY.md` for why every
+     * member matters here, not just the ones with a readable number.
+     */
+    private fun labelOf(node: AccessibilityNodeInfo): String? =
+        node.text?.toString()?.takeIf { it.isNotBlank() }
+            ?: node.contentDescription?.toString()?.takeIf { it.isNotBlank() }
 
     /**
      * Looks for admin wording anywhere inside the row. The badge often has no

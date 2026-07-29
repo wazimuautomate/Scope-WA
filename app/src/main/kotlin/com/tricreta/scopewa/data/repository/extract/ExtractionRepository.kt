@@ -112,15 +112,17 @@ class ExtractionRepository(
      * phonebook (architecture doc section 10, Q8).
      *
      * Members whose number wasn't readable are marked with
-     * [ExportRecord.hidden] when [includeUnreachable] is set. The exporter then
-     * does the right thing per format on its own: writes the literal `hidden`
-     * in CSV/JSON so counts stay truthful, and skips them in TXT and VCF where
-     * a row without a number would be meaningless.
+     * [ExportRecord.hidden] and **included by default** — the point of
+     * extraction is to capture everyone in the group, not only the subset
+     * WhatsApp happened to show a number for. The exporter does the right
+     * thing per format on its own: writes the literal `hidden` in CSV/JSON so
+     * counts stay truthful, and skips them in TXT and VCF where a row without
+     * a number would be meaningless.
      */
     fun exportMerged(
         merged: MergedExtraction,
         format: ExportFormat,
-        includeUnreachable: Boolean = false
+        includeUnreachable: Boolean = true
     ): String {
         val source = if (includeUnreachable) merged.members else merged.withNumbers
 

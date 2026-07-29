@@ -9,16 +9,20 @@ package com.tricreta.scopewa.data.repository.extract
  *   and are the most likely to report a stranger's message.
  * @param excludeSaved skip anyone already in the contacts database. Extraction
  *   is for harvesting *unknown* numbers.
- * @param excludeWithoutNumbers drop members whose number wasn't readable. On by
- *   default: they cannot be messaged, so keeping them only pads the export.
- *   Turning it off keeps them so the user can see *who* is unreachable, which
- *   is what the extension's "hidden" rows were for.
+ * @param excludeWithoutNumbers drop members whose number wasn't readable. **Off
+ *   by default** — the point of this screen is to capture everyone in the
+ *   group, not just the subset WhatsApp happens to show a number for. A member
+ *   without a number still gets a row (their saved/push name, or a fallback —
+ *   see [MemberRowParser]); it just can't be messaged, since there is no
+ *   number to send to. That's a hard limit, not a filtering choice — turning
+ *   this on hides those rows instead of producing a number for them, which
+ *   doesn't exist to find. See [MemberNumberStatus] for why.
  * @param excludeSelf never export the account running the extraction.
  */
 data class ExtractionFilters(
     val excludeAdmins: Boolean = false,
     val excludeSaved: Boolean = false,
-    val excludeWithoutNumbers: Boolean = true,
+    val excludeWithoutNumbers: Boolean = false,
     val excludeSelf: Boolean = true
 )
 
