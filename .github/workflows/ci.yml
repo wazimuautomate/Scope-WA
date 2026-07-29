@@ -39,6 +39,16 @@ jobs:
       - name: Unit test the brain layer
         run: gradle testDebugUnitTest --stacktrace
 
+      # Gradle prints per-test detail only on failure, and the console log is
+      # awkward to read across parallel phase branches. Keep the HTML report.
+      - name: Upload test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report-${{ github.ref_name }}
+          path: app/build/reports/tests/testDebugUnitTest/
+          retention-days: 7
+
       - name: Assemble debug APK
         run: gradle assembleDebug --stacktrace
 
