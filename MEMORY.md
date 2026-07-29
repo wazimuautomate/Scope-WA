@@ -20,16 +20,23 @@ permission walkthrough are all built and CI-green (branch
 > treat Phase 1 as done, and do not start Phase 4, 5, or 7, until someone runs
 > the in-app test on a real handset.** See "What Phase 1 still needs" below.
 
-**Phase 2 (Contacts) — built on `phase-2-contacts`, PR open into `features`
-(2026-07-29).** Room schema (all ten tables), CSV/VCF/TXT import with dedupe and
+**Phase 2 (Contacts) — done, merged into `features` (PR #3, 2026-07-29).** Room schema (all ten tables), CSV/VCF/TXT import with dedupe and
 a confirm-before-you-write preview, lists + bulk-select picker, CSV/TXT/VCF/JSON
 file export, and the `opted_out` + suppression plumbing Phase 5 needs for STOP
 handling. Verified by CI only — compile plus 104 unit tests. No device test was
 done and none is needed: Phase 2 touches no Accessibility code. The Compose
 screens are compile-checked but have not been clicked through on a handset.
 
-**Phase 3 (Templates)** was being built in parallel in another session on
-`phase-3-templates`. Phase 2 blocks nothing any more.
+**Phase 3 (Templates)** was still in flight in another session on
+`phase-3-templates` when Phase 2 merged. Phase 2 blocks nothing any more, and
+`docs/BUILD-PLAN.md` wanted it to land first precisely so Phase 3 only has to
+add fields to `TemplateEntity` — **if Phase 3's branch carries a richer one,
+take theirs.**
+
+**Phase 4 (extractor) is unblocked on paper but not in practice:** it depends on
+Phase 1, and Phase 1's device verification above has not happened. Its
+`WaSelectors` view-ids are still researched guesses, so extraction built on them
+would be built on sand. Do the 10-minute handset test first.
 
 ## What Phase 1 still needs (a human with the phone, ~10 minutes)
 
