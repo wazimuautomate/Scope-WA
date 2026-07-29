@@ -21,7 +21,19 @@ data class EngineState(
     val activeHoursEnd: Int,
     val repliesInCurrentBatch: Int = 0,
     val sentInCurrentBatch: Int = 0,
-    val batchSizeForReplyCheck: Int = 0
+    val batchSizeForReplyCheck: Int = 0,
+
+    /**
+     * Whether anything is actually watching for replies — i.e. whether the user
+     * granted notification access and
+     * [com.tricreta.scopewa.accessibility.WaNotificationListener] is able to see
+     * them arrive.
+     *
+     * Defaults to false because that is the safe answer: an ungranted phone
+     * reports zero replies forever, and treating that as "nobody is answering"
+     * would auto-pause every campaign on its first batch.
+     */
+    val replyTrackingAvailable: Boolean = false
 )
 
 /** The single next thing the foreground service should do. */
@@ -78,10 +90,10 @@ class CampaignEngine(private val planner: PacingPlanner) {
                 repliesInCurrentBatch = state.repliesInCurrentBatch,
                 // CircuitBreaker's cold-batch rule is `sentInCurrentBatch >=
                 // batchSizeForReplyCheck && repliesInCurrentBatch == 0`, which
-                // is true for all-zeros — so a campaign that hasn't opted into
-                // reply tracking would pause with ColdBatchNoReplies before its
-                // very first message. Push the threshold out of reach instead
-                // of weakening a Phase 0 rule that other phases rely on.
+                // is true for all-zeros — so a campaign that isn't counting
+                // replies would pause with ColdBatchNoReplies before its very
+                // first message. Push the threshold out of reach instead of
+                // weakening a Phase 0 rule that other phases rely on.
                 batchSizeForReplyCheck =
                     if (replyCheckEnabled(state)) state.batchSizeForReplyCheck else Int.MAX_VALUE,
                 sentToday = state.sentToday,
@@ -93,12 +105,23 @@ class CampaignEngine(private val planner: PacingPlanner) {
         )
 
     /**
-     * Reply tracking only means something once we're actually counting a batch.
-     * Until then "zero replies" is not evidence of a cold list, it's evidence
-     * that nothing has been sent.
+     * When "zero replies" is evidence of a cold list rather than evidence of
+     * nothing having happened yet. All three conditions matter:
+     *
+     * - **Something is watching.** Without notification access nobody ever
+     *   observes a reply, so the count is zero by construction. Firing the
+     *   breaker on that would auto-pause every campaign on every phone that
+     *   declined the permission — which is the state the app must keep working
+     *   in, since the permission is explicitly optional.
+     * - **A batch size is set.** Zero would make the rule fire before the first
+     *   message.
+     * - **The batch has actually started.** A batch nobody has sent into yet
+     *   has no replies for reasons that say nothing about the list.
      */
     private fun replyCheckEnabled(state: EngineState): Boolean =
-        state.batchSizeForReplyCheck > 0 && state.sentInCurrentBatch > 0
+        state.replyTrackingAvailable &&
+            state.batchSizeForReplyCheck > 0 &&
+            state.sentInCurrentBatch > 0
 }
 
 /**

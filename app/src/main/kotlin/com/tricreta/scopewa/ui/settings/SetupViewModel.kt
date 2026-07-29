@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tricreta.scopewa.accessibility.AccessibilityPermission
+import com.tricreta.scopewa.accessibility.NotificationPermission
 import com.tricreta.scopewa.accessibility.ProbeResultPresenter
 import com.tricreta.scopewa.accessibility.WaPackage
 import com.tricreta.scopewa.accessibility.WaProbe
@@ -28,6 +29,8 @@ data class SetupUiState(
     val serviceEnabledInSettings: Boolean = false,
     val serviceConnected: Boolean = false,
     val mayNeedRestrictedUnlock: Boolean = false,
+    /** Notification access — optional, and the reason opt-outs are automatic. */
+    val notificationAccessGranted: Boolean = false,
     val probeState: ProbeState = ProbeState.Idle
 ) {
     val hasWhatsApp: Boolean get() = installedPackages.isNotEmpty()
@@ -36,6 +39,10 @@ data class SetupUiState(
      * Whether setup is far enough along to attempt a campaign. Deliberately
      * requires the service to be *connected*, not merely enabled in Settings —
      * a ticked checkbox that hasn't bound yet cannot send anything.
+     *
+     * Deliberately does **not** require [notificationAccessGranted]: campaigns
+     * run without it, opt-outs just have to be marked by hand. Making it a
+     * prerequisite would be dishonest about what the app needs.
      */
     val isReady: Boolean get() = hasWhatsApp && serviceConnected
 }
@@ -73,7 +80,8 @@ class SetupViewModel : ViewModel() {
                     ?: installed.firstOrNull(),
                 serviceEnabledInSettings = AccessibilityPermission.isServiceEnabledInSettings(context),
                 serviceConnected = WaServiceBridge.isConnected.value,
-                mayNeedRestrictedUnlock = AccessibilityPermission.mayNeedRestrictedSettingsUnlock()
+                mayNeedRestrictedUnlock = AccessibilityPermission.mayNeedRestrictedSettingsUnlock(),
+                notificationAccessGranted = NotificationPermission.isGranted(context)
             )
         }
     }

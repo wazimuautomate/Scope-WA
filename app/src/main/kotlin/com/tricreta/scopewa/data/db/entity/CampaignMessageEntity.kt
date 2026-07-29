@@ -63,7 +63,23 @@ data class CampaignMessageEntity(
     val error: String? = null,
 
     @ColumnInfo(name = "attempt_count")
-    val attemptCount: Int = 0
+    val attemptCount: Int = 0,
+
+    /**
+     * When this recipient last answered, as seen by
+     * [com.tricreta.scopewa.accessibility.WaNotificationListener].
+     *
+     * Deliberately a timestamp and a count and **nothing else** — the reply's
+     * text is never stored. Reading notifications is a sensitive permission and
+     * the app keeps only what opt-out handling and the `ColdBatchNoReplies`
+     * breaker need. This column is what makes that breaker able to fire at all;
+     * before Phase 5's follow-up the reply count was structurally always zero.
+     */
+    @ColumnInfo(name = "replied_at")
+    val repliedAt: Long? = null,
+
+    @ColumnInfo(name = "reply_count")
+    val replyCount: Int = 0
 )
 
 /** The outcome of one recipient. Persisted as the constant's own name. */

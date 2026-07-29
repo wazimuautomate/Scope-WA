@@ -346,6 +346,53 @@ object WaSelectors {
         "privacy settings"
     )
 
+    // ---------------------------------------------------------------------
+    // Notification wording — Phase 5's reply listener
+    // (accessibility/WaNotificationListener.kt, brain/reply/).
+    //
+    // These are strings WhatsApp puts in its *notifications* rather than on
+    // screen, but they belong here for the same reason everything else does:
+    // they are WhatsApp's wording, they change when WhatsApp changes, and a
+    // patch to them should touch one file. Localised and therefore best-effort
+    // — the structural checks in `ReplyNotificationParser` (group summary flag,
+    // ongoing flag, empty body) are what carry the load; these only catch the
+    // English-locale noise those flags miss.
+    // ---------------------------------------------------------------------
+
+    /**
+     * Titles WhatsApp uses on its own housekeeping notifications rather than on
+     * a conversation. A notification titled with the app's own name is never a
+     * message from a person.
+     */
+    val NOTIFICATION_APP_TITLES = listOf("whatsapp", "whatsapp business")
+
+    /**
+     * Bodies that are WhatsApp talking about itself, not somebody replying:
+     * the foreground-service notice, backup progress, call notifications and
+     * typing indicators. Matched as case-insensitive substrings.
+     */
+    val NOTIFICATION_NOISE_FRAGMENTS = listOf(
+        "checking for new messages",
+        "backing up",
+        "backup in progress",
+        "restoring media",
+        "restoring messages",
+        "tap for more info",
+        "tap to load",
+        "is typing",
+        "typing…",
+        "typing...",
+        "recording audio",
+        "missed voice call",
+        "missed video call",
+        "incoming voice call",
+        "incoming video call",
+        "ongoing call",
+        "whatsapp web is currently active",
+        "you have new messages",
+        "new messages from"
+    )
+
     /**
      * Case-insensitive substring match of [haystack] against a fragment list.
      * Returns the fragment that matched, or null. Returning *which* fragment

@@ -25,13 +25,15 @@ package com.tricreta.scopewa.brain.campaign
  * never matches "acha", "don't stop" is not an opt-out, and neither is "can you
  * stop by tomorrow".
  *
- * ## Known limitation — read this before trusting it
+ * ## What feeds this
  *
- * Nothing in the app currently *observes* incoming replies. Reading them needs
- * a `NotificationListenerService`, which Phase 5 does not add. Until that
- * exists this detector is exercised only when a reply is fed to it by hand, so
- * "automatic" opt-out is automatic in everything except the noticing. See
- * `MEMORY.md`.
+ * Replies are observed by
+ * [com.tricreta.scopewa.accessibility.WaNotificationListener], parsed by
+ * [com.tricreta.scopewa.brain.reply.ReplyNotificationParser] and attributed by
+ * [com.tricreta.scopewa.brain.reply.ReplyRouter], which calls this. The
+ * hand-marking path in the contacts screen still exists and still matters:
+ * notification access is optional, and on a phone that declined it this
+ * detector is only exercised when a reply is fed to it by hand.
  *
  * Pure Kotlin — no Android imports — so CI tests it without a phone.
  */

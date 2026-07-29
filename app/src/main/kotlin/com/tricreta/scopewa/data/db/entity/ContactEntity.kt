@@ -71,6 +71,13 @@ data class ContactEntity(
     @ColumnInfo(name = "times_replied")
     val timesReplied: Int = 0,
 
+    /**
+     * When this person last replied. Filled in by the reply listener; never
+     * accompanied by the reply's text, which is not stored anywhere.
+     */
+    @ColumnInfo(name = "last_replied_at")
+    val lastRepliedAt: Long? = null,
+
     @ColumnInfo(name = "created_at")
     val createdAt: Long = 0,
 

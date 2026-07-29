@@ -33,7 +33,8 @@ class CampaignEngineTest {
             activeHoursEnd = 20,
             repliesInCurrentBatch = 1,
             sentInCurrentBatch = 3,
-            batchSizeForReplyCheck = 20
+            batchSizeForReplyCheck = 20,
+            replyTrackingAvailable = true
         ).overrides()
 
     @Test
@@ -103,10 +104,63 @@ class CampaignEngineTest {
     @Test
     fun `a whole batch with no replies pauses as a cold batch`() {
         val state = healthyState {
-            copy(sentInCurrentBatch = 20, repliesInCurrentBatch = 0, batchSizeForReplyCheck = 20)
+            copy(
+                sentInCurrentBatch = 20,
+                repliesInCurrentBatch = 0,
+                batchSizeForReplyCheck = 20,
+                replyTrackingAvailable = true
+            )
         }
 
         assertEquals(CampaignStep.Pause(PauseReason.ColdBatchNoReplies), engine.nextStep(state))
+    }
+
+    @Test
+    fun `the cold-batch rule stays off when nothing is watching for replies`() {
+        // Without notification access the reply count is zero by construction,
+        // not because the list is cold. Firing here would auto-pause every
+        // campaign on a phone that declined an explicitly optional permission.
+        val state = healthyState {
+            copy(
+                sentInCurrentBatch = 20,
+                repliesInCurrentBatch = 0,
+                batchSizeForReplyCheck = 20,
+                replyTrackingAvailable = false
+            )
+        }
+
+        assertTrue(engine.nextStep(state) is CampaignStep.Send)
+        assertNull(engine.checkSafety(state))
+    }
+
+    @Test
+    fun `reply tracking alone is not enough - the batch has to have started`() {
+        // All-zero input satisfies CircuitBreaker's `sent >= size && replies == 0`
+        // literally. A campaign must not pause before its first message.
+        val state = healthyState {
+            copy(
+                sentInCurrentBatch = 0,
+                repliesInCurrentBatch = 0,
+                batchSizeForReplyCheck = 0,
+                replyTrackingAvailable = true
+            )
+        }
+
+        assertNull(engine.checkSafety(state))
+    }
+
+    @Test
+    fun `a batch that got replies keeps going`() {
+        val state = healthyState {
+            copy(
+                sentInCurrentBatch = 20,
+                repliesInCurrentBatch = 2,
+                batchSizeForReplyCheck = 20,
+                replyTrackingAvailable = true
+            )
+        }
+
+        assertNull(engine.checkSafety(state))
     }
 
     @Test

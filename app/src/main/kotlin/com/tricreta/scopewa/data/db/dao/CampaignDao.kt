@@ -57,6 +57,15 @@ const val ANY_CAMPAIGN: Long = -1L
  */
 const val ANY_STATUS: String = "*"
 
+/**
+ * One person a campaign has already messaged — just enough to match an
+ * incoming reply back to them. See [CampaignDao.messagedSince].
+ */
+data class MessagedRecipient(
+    @ColumnInfo(name = "phone_e164") val phoneE164: String,
+    @ColumnInfo(name = "display_name") val displayName: String
+)
+
 @Dao
 interface CampaignDao {
 
@@ -300,4 +309,54 @@ interface CampaignDao {
         """
     )
     fun observeCampaignTotals(): Flow<List<CampaignTotals>>
+
+    // ---- replies -----------------------------------------------------------
+
+    /**
+     * Everyone messaged since [since], across every campaign — the set a reply
+     * could plausibly belong to. Campaign-agnostic on purpose: somebody
+     * answering yesterday's campaign today is still answering *us*, and an
+     * opt-out is global anyway.
+     */
+    @Query(
+        """
+        SELECT DISTINCT phone_e164, display_name FROM campaign_messages
+        WHERE status = 'Sent' AND sent_at IS NOT NULL AND sent_at >= :since
+        """
+    )
+    suspend fun messagedSince(since: Long): List<MessagedRecipient>
+
+    /**
+     * Records a reply against the *most recent* message sent to that number,
+     * rather than every message it ever received. Without the subquery a single
+     * reply would light up months of history and the cold-batch breaker would
+     * never fire again.
+     */
+    @Query(
+        """
+        UPDATE campaign_messages
+        SET replied_at = :at, reply_count = reply_count + 1
+        WHERE id = (
+            SELECT id FROM campaign_messages
+            WHERE phone_e164 = :number AND status = 'Sent'
+            ORDER BY sent_at DESC
+            LIMIT 1
+        )
+        """
+    )
+    suspend fun recordReplyForNumber(number: String, at: Long)
+
+    /**
+     * How many people have answered this campaign since [since]. Feeds
+     * [com.tricreta.scopewa.brain.safety.CampaignSafetyState.repliesInCurrentBatch]
+     * — the number that was structurally always zero until the reply listener
+     * existed.
+     */
+    @Query(
+        """
+        SELECT COUNT(*) FROM campaign_messages
+        WHERE campaign_id = :campaignId AND replied_at IS NOT NULL AND replied_at >= :since
+        """
+    )
+    suspend fun replyCountSince(campaignId: Long, since: Long): Int
 }

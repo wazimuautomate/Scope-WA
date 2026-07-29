@@ -8,6 +8,11 @@ import com.tricreta.scopewa.brain.campaign.RecipientOrdering
 import com.tricreta.scopewa.brain.campaign.RecipientPlan
 import com.tricreta.scopewa.brain.campaign.RecipientVariables
 import com.tricreta.scopewa.brain.pacing.WarmUpRamp
+import com.tricreta.scopewa.brain.phone.PhoneNormalizer
+import com.tricreta.scopewa.brain.reply.InFlightRecipient
+import com.tricreta.scopewa.brain.reply.IncomingReply
+import com.tricreta.scopewa.brain.reply.ReplyRoute
+import com.tricreta.scopewa.brain.reply.ReplyRouter
 import com.tricreta.scopewa.brain.template.TemplateEngine
 import com.tricreta.scopewa.brain.template.TemplateVariables
 import com.tricreta.scopewa.brain.uniqueness.UniquenessResult
@@ -66,6 +71,7 @@ class CampaignRepository(
     private val suppressionDao: SuppressionDao,
     private val engine: TemplateEngine = TemplateEngine(),
     private val warmUpRamp: WarmUpRamp = WarmUpRamp(),
+    private val normalizer: PhoneNormalizer = PhoneNormalizer(),
     private val zone: ZoneId = ZoneId.systemDefault(),
     private val now: () -> Long = System::currentTimeMillis
 ) {
@@ -278,6 +284,17 @@ class CampaignRepository(
      */
     suspend fun applyOptOut(phoneE164: String, replyText: String): Boolean {
         val keyword = OptOutDetector.matchedKeyword(replyText) ?: return false
+        return applyOptOutForKeyword(phoneE164, keyword)
+    }
+
+    /**
+     * The same thing as [applyOptOut], for callers that already ran
+     * [OptOutDetector] and should not be passing a message body any further —
+     * the reply listener path. Keeps the promise that notification text never
+     * travels past the point where the yes/no decision was made.
+     */
+    suspend fun applyOptOutForKeyword(phoneE164: String, keyword: String): Boolean {
+        if (keyword.isBlank()) return false
         val timestamp = now()
         val reason = OptOutDetector.reasonFor(keyword)
         database.withTransaction {
@@ -287,6 +304,56 @@ class CampaignRepository(
         }
         return true
     }
+
+    // ---- incoming replies --------------------------------------------------
+
+    /**
+     * The whole reply pipeline behind one call, so
+     * [com.tricreta.scopewa.accessibility.WaNotificationListener] can stay a
+     * field-lifter with no logic in it.
+     *
+     * The routing decision itself is made by [ReplyRouter], which is pure and
+     * unit tested; this method only supplies the in-flight recipient list and
+     * writes the outcome. Returns the route it took so a caller (or a test)
+     * can see what happened without the listener having to re-derive it.
+     */
+    suspend fun handleIncomingReply(reply: IncomingReply): ReplyRoute {
+        val route = ReplyRouter.route(reply, inFlightRecipients(), normalizer)
+        when (route) {
+            is ReplyRoute.MarkOptOut -> applyOptOutForKeyword(route.phoneE164, route.matchedKeyword)
+            is ReplyRoute.RecordReply -> recordReply(route.phoneE164)
+            is ReplyRoute.Ignore -> Unit
+        }
+        return route
+    }
+
+    /**
+     * Everyone messaged recently enough that a reply could still be about it.
+     * The window is generous on purpose: a reply two days late is still a reply,
+     * and the cost of a wide window is only that more names are candidates for
+     * matching.
+     */
+    suspend fun inFlightRecipients(atMillis: Long = now()): List<InFlightRecipient> =
+        campaignDao.messagedSince(atMillis - REPLY_WINDOW_MILLIS)
+            .map { InFlightRecipient(phoneE164 = it.phoneE164, displayName = it.displayName) }
+
+    /**
+     * Records that [phoneE164] answered: against the contact (which promotes
+     * them in [RecipientOrdering]'s replied-first tier) and against the most
+     * recent message sent to them (which is what the cold-batch breaker counts).
+     * The reply's text is not stored.
+     */
+    suspend fun recordReply(phoneE164: String) {
+        val timestamp = now()
+        database.withTransaction {
+            contactDao.recordReply(phoneE164, timestamp)
+            campaignDao.recordReplyForNumber(phoneE164, timestamp)
+        }
+    }
+
+    /** Replies to [campaignId] since [since] — the current batch's reply count. */
+    suspend fun repliesSince(campaignId: Long, since: Long): Int =
+        campaignDao.replyCountSince(campaignId, since)
 
     /** Numbers the send loop must never dial: explicit blocks plus opt-outs. */
     suspend fun suppressedNumbers(): Set<String> =
@@ -374,6 +441,10 @@ class CampaignRepository(
 
         private const val CHUNK = 400
         private const val MILLIS_PER_DAY = 24L * 60L * 60L * 1000L
+
+        /** How long after being messaged somebody's reply still counts as a reply. */
+        const val REPLY_WINDOW_DAYS = 14L
+        private const val REPLY_WINDOW_MILLIS = REPLY_WINDOW_DAYS * MILLIS_PER_DAY
 
         fun create(context: Context): CampaignRepository {
             val database = ScopeWaDatabase.get(context)

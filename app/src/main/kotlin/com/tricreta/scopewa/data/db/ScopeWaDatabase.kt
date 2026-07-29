@@ -22,6 +22,7 @@ import com.tricreta.scopewa.data.db.entity.GroupAddJobEntity
 import com.tricreta.scopewa.data.db.entity.SettingEntity
 import com.tricreta.scopewa.data.db.entity.SuppressionEntity
 import com.tricreta.scopewa.data.db.entity.TemplateEntity
+import com.tricreta.scopewa.data.db.migration.MIGRATION_1_2
 
 /**
  * The single Room database. Everything stays on the phone — architecture doc
@@ -40,15 +41,20 @@ import com.tricreta.scopewa.data.db.entity.TemplateEntity
  *
  * ## Migrations
  *
- * Schema export is on (`app/schemas/`, committed) and there is no destructive
- * fallback — both changed for the 1.0.0 release. Version 1 needs no `Migration`
- * objects because it is the first shipped schema.
+ * Schema export is on (`app/schemas/`, committed) and there is **no destructive
+ * fallback** — both changed for the 1.0.0 release.
+ *
+ * 1.0.0 ships at **version 2**. Version 1's schema was exported before Phases 4
+ * and 7 and the reply listener had merged, so it is a real, committed baseline
+ * that a debug install can be sitting on;
+ * [com.tricreta.scopewa.data.db.migration.MIGRATION_1_2] closes the gap between
+ * it and these entities. `1.json` stays committed — a migration you cannot test
+ * against its starting schema is not a migration.
  *
  * **From here on, every schema change needs a real `Migration` plus a `version`
- * bump.** There is app data on real phones now, and without destructive
- * fallback a missing migration is not a silent wipe — it is an
- * `IllegalStateException` the first time the user opens the app after updating.
- * Commit the new `app/schemas/<n>.json` alongside the migration.
+ * bump.** Without destructive fallback a missing migration is not a silent
+ * wipe — it is an `IllegalStateException` the first time the user opens the app
+ * after updating. Commit the new `app/schemas/<n>.json` alongside the migration.
  */
 @Database(
     entities = [
@@ -65,7 +71,10 @@ import com.tricreta.scopewa.data.db.entity.TemplateEntity
         GroupAddJobEntity::class,     // Phase 7
         SettingEntity::class          // Phase 1 (Settings screen)
     ],
-    version = 1,
+    // 2 — everything that landed after the version-1 schema was exported: the
+    //     reply listener's columns, Phase 4's extraction counters and Phase 7's
+    //     group-add job row. See [MIGRATION_1_2].
+    version = 2,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -99,9 +108,11 @@ abstract class ScopeWaDatabase : RoomDatabase() {
 
         private fun build(context: Context): ScopeWaDatabase =
             Room.databaseBuilder(context, ScopeWaDatabase::class.java, NAME)
-                // No .fallbackToDestructiveMigration() and no .addMigrations(...):
-                // v1 is the first shipped schema. Any later version must add a
-                // real Migration here — see this class's KDoc.
+                // Deliberately no .fallbackToDestructiveMigration(): losing a
+                // client's contacts, suppression list and campaign history to a
+                // forgotten migration is worse than crashing on launch, because
+                // the crash is noticed and the wipe is not.
+                .addMigrations(MIGRATION_1_2)
                 .build()
     }
 }
