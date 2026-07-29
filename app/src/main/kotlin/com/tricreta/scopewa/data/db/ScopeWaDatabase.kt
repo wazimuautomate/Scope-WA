@@ -38,12 +38,15 @@ import com.tricreta.scopewa.data.db.entity.TemplateEntity
  *
  * ## Migrations
  *
- * `exportSchema = false` and destructive fallback are deliberate *while
- * unreleased*. Nothing has shipped, so there is no user data to migrate and a
- * schema JSON would only record guesses that later phases will change. Before
- * the first signed release: turn schema export on, add a `room.schemaLocation`
- * KSP arg, commit the schema, and drop the destructive fallback. Tracked in
- * `MEMORY.md`.
+ * Schema export is on (`app/schemas/`, committed) and there is no destructive
+ * fallback — both changed for the 1.0.0 release. Version 1 needs no `Migration`
+ * objects because it is the first shipped schema.
+ *
+ * **From here on, every schema change needs a real `Migration` plus a `version`
+ * bump.** There is app data on real phones now, and without destructive
+ * fallback a missing migration is not a silent wipe — it is an
+ * `IllegalStateException` the first time the user opens the app after updating.
+ * Commit the new `app/schemas/<n>.json` alongside the migration.
  */
 @Database(
     entities = [
@@ -61,7 +64,7 @@ import com.tricreta.scopewa.data.db.entity.TemplateEntity
         SettingEntity::class          // Phase 1 (Settings screen)
     ],
     version = 1,
-    exportSchema = false
+    exportSchema = true
 )
 @TypeConverters(Converters::class)
 abstract class ScopeWaDatabase : RoomDatabase() {
@@ -92,8 +95,9 @@ abstract class ScopeWaDatabase : RoomDatabase() {
 
         private fun build(context: Context): ScopeWaDatabase =
             Room.databaseBuilder(context, ScopeWaDatabase::class.java, NAME)
-                // Pre-release only — see the migration note in this class's KDoc.
-                .fallbackToDestructiveMigration()
+                // No .fallbackToDestructiveMigration() and no .addMigrations(...):
+                // v1 is the first shipped schema. Any later version must add a
+                // real Migration here — see this class's KDoc.
                 .build()
     }
 }
