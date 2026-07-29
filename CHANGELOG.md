@@ -182,6 +182,32 @@ phone; the group-add selectors are researched candidates and are very likely to
 need correcting from a Diagnostics dump. When it is tested it must be against a
 **disposable test group with test numbers only**.
 
+### Changed — Pre-release hardening
+
+- **Room schema export is on and destructive migration is gone.**
+  `exportSchema = true`, a `room.schemaLocation` KSP arg writes the schema to
+  `app/schemas/` (tracked in git, and added to the `androidTest` assets so
+  `MigrationTestHelper` can read it), and `fallbackToDestructiveMigration()` is
+  removed from the builder. This was always meant to happen at the first
+  release, and it has arrived: from here a schema change needs a real
+  `Migration` and a version bump, because a missing one now throws on the user's
+  first launch instead of silently wiping their contacts and campaigns.
+- **CI generates and checks the exported schema.** Nobody on this project has a
+  local JDK, so the build fails if KSP exported nothing, warns if `app/schemas`
+  drifts from what's committed, and uploads a `room-schema` artifact. The
+  `app/schemas/*.json` for version 1 is committed from a real CI build — never
+  hand-written, because a wrong schema is worse than a missing one.
+- **Version set to 1.0.0** (`versionCode = 1`), replacing the `0.1.0`
+  placeholder, so the release workflow tags `v1.0.0`.
+- **Minification is off for the release build type**, deliberately, and
+  `proguard-rules.pro` gained the Room entity/converter/enum keeps it was
+  missing. CI only ever assembles a debug APK, so no R8-processed build has been
+  run anywhere, and this app's failure mode under over-stripping is a silently
+  dead Accessibility run on a client's phone rather than a build error. The
+  distribution channel is a direct-install APK, so nothing is being bought with
+  that risk. Re-enabling is two lines once someone can test an R8 build on a
+  handset.
+
 ### Added — Phase 5: Bulk sender
 
 - **Campaign composer** (`ui/campaign/`) — list + template + pacing profile +
