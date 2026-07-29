@@ -6,6 +6,40 @@ merged PR, newest first within each release. Format loosely follows
 
 ## [Unreleased]
 
+### Added — Phase 6: Activity log & campaign reports
+
+- **Activity log** (`ui/activitylog/ActivityLogScreen`) — every message that has
+  an outcome, newest first, with Sent / Failed / Skipped chips, a
+  filter-by-campaign row, "Show more" paging, and **Export CSV**. The log is the
+  app's receipt: when the client asks "did Mary get it?", this is the screen
+  that answers, which is why each row carries the *rendered* text rather than
+  the template it came from.
+- **Per-campaign report** (`ui/activitylog/CampaignReportScreen`) — headline
+  success rate, queued/sent/failed/skipped totals, the uniqueness figure of what
+  actually went out, the skip breakdown by reason, the failure breakdown by
+  wording, the pause reason if a circuit breaker stopped the run, and Export as
+  CSV or as text.
+- **Skips are counted, and are never failures.** `successRate` divides by
+  *attempted* (sent + failed) and excludes skips entirely, and the skip chip is
+  amber rather than red. A campaign that correctly skipped half its list for
+  opting out must not read as 50% successful — a report that scored it that way
+  would push the client toward turning the safety layers off.
+- **Pure-Kotlin report logic** in `data/repository/report/`, unit tested in CI
+  without a phone: `CampaignReport` (model plus a `SkipCategory` classifier),
+  `CampaignReportBuilder` (the arithmetic), and `ActivityLogExporter` (both
+  CSVs plus the text summary).
+- **Shared `CsvWriter`** (`data/repository/csv/`) — the RFC 4180 escaping was
+  extracted out of Phase 2's `ContactExporter`, which now delegates to it. A
+  rendered WhatsApp message routinely contains commas, quotes *and* newlines,
+  so a second hand-rolled escaper would have been a second chance to shift every
+  column one cell to the right.
+- **DAO additions only** (`CampaignDao`) — `observeActivityLog` /
+  `activityLog` (joined to the campaign name, filterable, limit+offset),
+  `observeActivityLogCount`, and `observeCampaignTotals`. No new
+  `@Database(entities = [...])` entries; every table already existed.
+- Activity log added to the bottom bar, and `ScopeWaNavHost` now delegates to
+  `activityLogGraph` instead of the Phase 6 placeholder.
+
 ### Added — Phase 5: Bulk sender
 
 - **Campaign composer** (`ui/campaign/`) — list + template + pacing profile +
