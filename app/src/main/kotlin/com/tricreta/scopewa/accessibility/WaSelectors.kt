@@ -121,6 +121,69 @@ object WaSelectors {
         contentDescriptions = listOf("Search")
     )
 
+    /** Localised admin badge wording, matched as a fallback. Best-effort. */
+    val ADMIN_LABEL_TEXTS = listOf("Group admin", "Admin", "Super admin")
+
+    /**
+     * The admin badge drawn on a participant row. Phase 4 also falls back to
+     * matching [ADMIN_LABEL_TEXTS] anywhere in the row, because on several
+     * layouts this badge carries no id of its own.
+     */
+    val ParticipantAdminBadge = Selector(
+        name = "participant admin badge",
+        viewIds = listOf("admin_indicator", "group_admin_indicator"),
+        texts = ADMIN_LABEL_TEXTS
+    )
+
+    /**
+     * The row that opens the full participant list — WhatsApp collapses long
+     * lists behind "View all" / "See all N". Matched by text because it carries
+     * no stable id of its own.
+     */
+    val ViewAllParticipants = Selector(
+        name = "view-all participants row",
+        viewIds = listOf("see_all_participants", "participants_search"),
+        texts = listOf("View all", "See all")
+    )
+
+    /**
+     * The group subject on the group-info screen. Used as the extraction's group
+     * name and to confirm the right group is open before reading any rows.
+     */
+    val GroupTitle = Selector(
+        name = "group title",
+        viewIds = listOf("conversation_contact_name", "group_name", "subject")
+    )
+
+    /**
+     * The "N participants" / "N members" header, parsed by
+     * [parseReportedMemberCount].
+     */
+    val ParticipantCountHeader = Selector(
+        name = "participant count header",
+        viewIds = listOf("participants_title", "group_participants_count"),
+        texts = listOf("participants", "members")
+    )
+
+    /**
+     * Pulls the member total out of a header like "824 participants" or
+     * "Participants (824)".
+     *
+     * Worth parsing: comparing this against the number of rows actually read is
+     * the only reliable way to notice that scrolling stopped early. A partial
+     * extraction that presents itself as complete is the worst outcome in this
+     * phase, because the user acts on it.
+     */
+    fun parseReportedMemberCount(headerText: String?): Int? {
+        if (headerText.isNullOrBlank()) return null
+        val lower = headerText.lowercase()
+        if (!lower.contains("participant") && !lower.contains("member")) return null
+        return Regex("""\d[\d,\s]*""").find(headerText)
+            ?.value
+            ?.filter { it.isDigit() }
+            ?.toIntOrNull()
+    }
+
     // ---------------------------------------------------------------------
     // Restriction / warning dialogs — these feed the circuit breaker
     // (architecture doc section 6, layer 4). Text-based by necessity: WhatsApp

@@ -8,6 +8,7 @@ import androidx.room.TypeConverters
 import com.tricreta.scopewa.data.db.dao.CampaignDao
 import com.tricreta.scopewa.data.db.dao.ContactDao
 import com.tricreta.scopewa.data.db.dao.ContactListDao
+import com.tricreta.scopewa.data.db.dao.ExtractionDao
 import com.tricreta.scopewa.data.db.dao.SuppressionDao
 import com.tricreta.scopewa.data.db.dao.TemplateDao
 import com.tricreta.scopewa.data.db.entity.CampaignEntity
@@ -70,6 +71,7 @@ abstract class ScopeWaDatabase : RoomDatabase() {
     abstract fun contactListDao(): ContactListDao
     abstract fun suppressionDao(): SuppressionDao
     abstract fun templateDao(): TemplateDao
+    abstract fun extractionDao(): ExtractionDao
     abstract fun campaignDao(): CampaignDao
 
     companion object {

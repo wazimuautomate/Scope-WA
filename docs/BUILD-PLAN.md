@@ -190,6 +190,19 @@ unit tests for dedupe-across-groups and filter logic.
 
 **Reference:** architecture doc sections 3.2, 5.1, 10 (Q7/Q8).
 
+> **Status: code complete on `phase-4-extractor`; WhatsApp side unverified.**
+> Screen, filter state and readiness guard were verified on the emulator, which
+> has no WhatsApp — so the scroll/read routine has never run against a real
+> group. Reusable by Phase 7: `data/repository/extract/` (member parsing,
+> filters, cross-group dedupe — pure and unit tested),
+> `accessibility/GroupExtractor.kt`, and the group selectors appended to
+> `WaSelectors.kt`.
+>
+> **A constraint Phase 7 inherits:** accessibility reads only *rendered* text,
+> so a participant's number is readable **only when they are not already saved
+> on the phone**. Candidate lists built from extractions will cover fewer
+> people than a group's member count — see `MemberNumberStatus` and `MEMORY.md`.
+
 ---
 
 ## Phase 5 — Bulk sender
