@@ -6,79 +6,29 @@ discipline section. This is not a changelog (that's `CHANGELOG.md`); it's
 
 ## Current phase
 
-**Phase 0 — done.** Project skeleton, CI, git repo, and governance docs.
+Statuses as of 2026-07-29. Phases 1, 2, 3 and 5 were built the same day in
+parallel sessions, which is why several say "code complete, not verified".
 
-**Phase 3 (Templates) — built and emulator-verified, PR #2 into `features`**
-(2026-07-29). Template list + editor, variable chips, spintax starters, live
-preview cycling 5 renders, uniqueness meter in the doc's exact wording. New
-pure-Kotlin `brain/template/TemplateAnalyzer.kt`,
-`brain/template/TemplateVariables.kt` and
-`brain/uniqueness/UniquenessSummary.kt`, all unit tested. Phase 5 consumes
-these; nothing else does yet.
+| Phase | State |
+| --- | --- |
+| 0 — skeleton, CI, governance | **Done**, on `main` |
+| 1 — Accessibility service | Code complete, merged to `features`. **Not device-verified.** |
+| 2 — Contacts | **Done**, merged to `features` (PR #3) |
+| 3 — Templates | Code complete, emulator-verified, PR #2 open into `features` |
+| 4 — Group extractor | In progress in another session |
+| 5 — Bulk sender | Code complete, PR into `features`. **Not device-verified.** |
+| 6 — Activity log / reports | Not started |
+| 7 — Group adder | Not started, ships last on purpose |
 
-**Phases 2 (Contacts) and 4 (Group extractor) are in progress in parallel
-sessions** as of the same day. Phase 4 started ahead of its stated
-dependencies.
+> ⚠️ **One handset test gates everything that touches WhatsApp.** The view-ids
+> in `accessibility/WaSelectors.kt` are researched candidates that have never
+> been captured from a real device — they may simply be wrong. Phases 4, 5 and 7
+> all send or read through them, so none of them can be called working until the
+> 10-minute test below passes. Do it before writing any more automation.
 
-Still unstarted: Phases 5, 6, 7.
+### What that handset test is (a human with the phone, ~10 minutes)
 
-### Phase 3 decisions Phase 2 and Phase 5 need to know
-
-- **Phase 3 landed the Room database, not Phase 2.** `docs/BUILD-PLAN.md`
-  recommended Phase 2 do it, but its rule is "whoever lands first scaffolds all
-  eight tables" — so `data/db/entity/Shells.kt` holds one-line placeholder
-  entities for the seven tables Phase 3 doesn't own. Filling one in is an
-  additive edit to that entity file; nobody needs to touch
-  `data/db/ScopeWaDatabase.kt`'s `@Database(entities = [...])` list again.
-- **`fallbackToDestructiveMigration()` is deliberate and temporary.** Fine while
-  shells are being filled in and no client data exists on any device; it must
-  become real migrations before the first APK ships.
-- **`TemplateEntity.knownVariables` is load-bearing, not metadata.**
-  `TemplateEngine` decides `{name|there}` means "CSV value, or *there* if blank"
-  — rather than a coin flip between two words — by looking `name` up in that
-  set. Phase 5 must pass the stored list to the engine at send time, or
-  templates render differently than they previewed.
-- **The editor's uniqueness meter is a floor, not a prediction.** It holds CSV
-  values constant and measures spintax variation only, because there is no
-  contact list until Phase 2. Phase 5 must recompute it against the real
-  rendered campaign before sending — that is the number section 6 describes.
-- **`ui/home/HomeScreen.kt` has a "Templates" button** next to Phase 1's Setup
-  and Diagnostics buttons. Templates need no Accessibility permission, so the
-  screen is reachable before setup is finished.
-
-**Phase 1 — code complete, NOT device-verified.** Accessibility service,
-node finding, selector capture tooling, the WhatsApp probe, and the guided
-permission walkthrough are all built and CI-green (branch
-`phase-1-accessibility`).
-
-> ⚠️ **Phase 1's acceptance criterion is not yet met.** `docs/BUILD-PLAN.md`
-> requires it to work "on a real phone", and nothing here has touched one.
-> The WhatsApp view-ids in `accessibility/WaSelectors.kt` are researched
-> candidates, not captured from a device — they may simply be wrong. **Do not
-> treat Phase 1 as done, and do not start Phase 4, 5, or 7, until someone runs
-> the in-app test on a real handset.** See "What Phase 1 still needs" below.
-
-**Phase 2 (Contacts) — done, merged into `features` (PR #3, 2026-07-29).** Room schema (all ten tables), CSV/VCF/TXT import with dedupe and
-a confirm-before-you-write preview, lists + bulk-select picker, CSV/TXT/VCF/JSON
-file export, and the `opted_out` + suppression plumbing Phase 5 needs for STOP
-handling. Verified by CI only — compile plus 104 unit tests. No device test was
-done and none is needed: Phase 2 touches no Accessibility code. The Compose
-screens are compile-checked but have not been clicked through on a handset.
-
-**Phase 3 (Templates)** was still in flight in another session on
-`phase-3-templates` when Phase 2 merged. Phase 2 blocks nothing any more, and
-`docs/BUILD-PLAN.md` wanted it to land first precisely so Phase 3 only has to
-add fields to `TemplateEntity` — **if Phase 3's branch carries a richer one,
-take theirs.**
-
-**Phase 4 (extractor) is unblocked on paper but not in practice:** it depends on
-Phase 1, and Phase 1's device verification above has not happened. Its
-`WaSelectors` view-ids are still researched guesses, so extraction built on them
-would be built on sand. Do the 10-minute handset test first.
-
-## What Phase 1 still needs (a human with the phone, ~10 minutes)
-
-1. Install the debug APK from the CI run on a phone that has WhatsApp.
+1. Install the debug APK from any green CI run on a phone that has WhatsApp.
 2. Open Scope WA → **Finish setup**, work through the steps, grant Accessibility.
 3. Run **Test it**. Then:
    - **"WhatsApp automation is working"** → Phase 1 is genuinely done. Record
@@ -86,11 +36,40 @@ would be built on sand. Do the 10-minute handset test first.
    - **"message box wasn't recognised"** → the permission works but the
      selectors are wrong, which is the expected outcome if the researched ids
      are stale. Use **Diagnostics → Start capture**, switch to a WhatsApp chat,
-     share the dump, and correct `WaSelectors.kt` from it. This is a one-line
-     fix per selector, by design.
+     share the dump, and correct `WaSelectors.kt` from it. One line per
+     selector, by design.
 4. Repeat on both WhatsApp and WhatsApp Business, and on both a Samsung and a
-   Tecno handset if available — OEM builds differ, and the client uses both
+   Tecno handset if available — OEM builds differ and the client uses both
    (architecture doc section 10, Q4).
+5. **Then, and only then**, Phase 5: send to two or three test numbers you own
+   and watch the pacing before pointing it at a real list.
+
+### Phase 5 specifics
+
+Composer, send routine, real foreground service, live progress and the
+`brain/campaign/` decision logic are built and CI-green (217 unit tests). Its
+BUILD-PLAN acceptance criterion — "a manual device test sending to a small set
+of real test numbers with visibly randomised pacing" — is **not** met.
+
+**Phase 5 carries Phase 3 in its history.** Phase 5 depends on Phase 3 and
+Phase 3 had not merged yet, so `phase-3-templates` was merged into
+`phase-5-bulk-sender`. Both branches had independently scaffolded the whole Room
+schema; the merge kept Phase 2's per-file entities, took Phase 3's richer
+`TemplateEntity`, deleted Phase 3's duplicate `entity/Shells.kt`, and aliased
+`ScopeWaDatabase.getInstance()` to `get()` so neither phase's call sites needed
+rewriting. **Phase 3's PR #2 should still land on its own merits.**
+
+### Phase 3 decisions that Phase 5 depends on
+
+- **`TemplateEntity.knownVariables` is load-bearing, not metadata.**
+  `TemplateEngine` decides `{name|there}` means "CSV value, or *there* if blank"
+  — rather than a coin flip between two words — by looking `name` up in that
+  set. Phase 5 passes the campaign's real variable names at render time via
+  `RecipientVariables.knownNames`.
+- **The editor's uniqueness meter is a floor, not a prediction.** It holds CSV
+  values constant and measures spintax variation only. Phase 5 recomputes it
+  against the real rendered campaign in `CampaignRepository.preview`, which is
+  the number architecture doc section 6 actually describes.
 
 ## Key decisions on record
 
@@ -129,6 +108,29 @@ would be built on sand. Do the 10-minute handset test first.
   owned directory) but have zero Android imports, so CI still tests them without
   a phone. `brain/` stays the cross-cutting anti-ban logic; the `brain/` rule in
   `CLAUDE.md` is "no Android in brain", not "all pure code in brain".
+- **The send queue is frozen when a campaign is created, not derived at send
+  time.** Recipient order, and the rendered text for every person, are written
+  into `campaign_messages` up front. That makes the uniqueness meter honest (it
+  scores the exact strings that will go out), makes a campaign resumed after a
+  reboot send what the user previewed, and stops the queue reshuffling
+  underneath a half-finished run.
+- **Recipient ordering is replied-first, then saved, then strangers** — and the
+  ordering matters *because* campaigns get cut short. When a cap or a circuit
+  breaker stops a run, the messages that already went are the safest ones.
+- **The daily cap belongs to the phone number, not the campaign.** Three
+  campaigns in one day share one allowance; `sentToday` is computed across all
+  `campaign_messages`.
+- **A skip is never a failure.** Opt-outs, suppression and cooldown skips do not
+  count toward the consecutive-failure breaker — pausing a campaign for doing
+  the right thing would be backwards.
+- **`CircuitBreaker`'s cold-batch rule is true for all-zero input** (`0 >= 0 &&
+  0 == 0`), so a campaign would auto-pause with `ColdBatchNoReplies` before its
+  first message. `CampaignEngine` disables the rule until a batch is genuinely
+  being counted rather than editing a Phase 0 rule other phases depend on. If
+  reply tracking is ever wired up, revisit this.
+- **Delivery is verified, not assumed.** `WaSender` treats a message as sent
+  only when the compose box clears afterwards. Without that check a campaign
+  against a restricted account would report a clean 100%.
 - **Build order is deliberate: extractor → sender → adder.** Risk increases
   in that order; each phase teaches the Accessibility techniques the next
   needs. Group adder (Phase 7) ships last on purpose.
@@ -158,6 +160,23 @@ All answered as of the architecture doc's writing (2026-07-29):
 
 Nothing outstanding from the client as of Phase 0. If a later phase surfaces
 a new open question, add it here with the date it came up.
+
+Raised by Phase 5 (2026-07-29), **blocking for the feature the client asked for**:
+- **Nothing reads incoming WhatsApp replies.** `OptOutDetector` and
+  `CampaignRepository.applyOptOut` are built and tested, but no component
+  observes messages arriving, so automatic STOP/ACHA/SITAKI handling is
+  automatic in everything except the noticing. It needs a
+  `NotificationListenerService` (another scary permission, another walkthrough
+  step) or reading the chat list via the Accessibility service. Until then
+  opt-outs only happen when marked by hand, and the `ColdBatchNoReplies`
+  circuit breaker can never fire because reply counts are always zero. **This
+  is a real gap against architecture doc section 6 layer 3 — decide the
+  approach before Phase 6.**
+- **Attachments are not implemented.** The client asked for images, video,
+  audio and documents, optionally captioned (section 10 Q6). The `wa.me` deep
+  link can only carry text, so attachments need a different send path
+  (share-intent into WhatsApp, then drive the picker). Not in Phase 5's
+  BUILD-PLAN scope, but the client did ask for it — schedule it explicitly.
 
 Raised by Phase 2 (2026-07-29), not blocking:
 - Q8 says extraction exports "as CSV files". Phase 2 also implements TXT, VCF
