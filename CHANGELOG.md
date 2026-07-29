@@ -6,6 +6,27 @@ merged PR, newest first within each release. Format loosely follows
 
 ## [Unreleased]
 
+### Changed — Phase 4 follow-up: capture every group member by default
+
+- `ExtractionFilters.excludeWithoutNumbers` now defaults to **false**. The
+  first cut of this screen dropped members WhatsApp doesn't show a number for
+  (saved contacts) by default, which contradicted the actual goal: a complete
+  record of who's in the group. They're now kept by default, as name-only
+  rows — turning the filter on is an opt-in choice to hide them, not the
+  starting behaviour. `exportMerged()`'s `includeUnreachable` default flipped
+  to match.
+- **What changed vs. what can't:** a member's display name can always be
+  filled in (falls back to their number, or now also to content-description
+  when a layout exposes the label that way) — that part is fixed. A phone
+  number for someone WhatsApp only shows a saved name for **cannot be
+  recovered**; `ContactEntity.phoneE164` is a required, unique column, so a
+  numberless "contact" has nothing to be identified or messaged by. That
+  distinction is now explicit in the screen copy instead of implied.
+- **Wired an actual export button.** The original screen's copy claimed
+  extraction results were "exported as files", but no UI action produced one —
+  a real gap. `FinishedCard` now has CSV/VCF/JSON export buttons using Phase
+  2's exact SAF file-picker pattern (`ContactFileIo`, `PendingExport`).
+
 ### Added — Phase 4: group contact extractor
 
 - **`MemberRowParser`** — turns a rendered participant row into a member.
@@ -58,6 +79,13 @@ merged PR, newest first within each release. Format loosely follows
 - The group-info selectors are researched candidates like Phase 1's, and **no
   WhatsApp interaction has been verified on a device** — the emulator has no
   WhatsApp and cannot realistically have one.
+- **The "capture every member by default" follow-up is CI-verified only, not
+  re-confirmed on the emulator.** The shared emulator was unresponsive under
+  host memory pressure (0.47 GB free) when this was ready to test — see
+  `MEMORY.md`. The change (a filter default flip plus additive export
+  buttons) doesn't touch anything the first Phase 4 pass already confirmed
+  renders correctly, but the export button itself has not been clicked on a
+  device.
 
 ### Added — Phase 1: Accessibility Service + permission walkthrough
 

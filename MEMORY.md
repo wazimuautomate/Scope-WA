@@ -61,6 +61,19 @@ than quietly dropping rows.
 A saved contact and a LID-hidden member look identical on screen, so the two
 are modelled as a single "number not shown" status instead of guessing.
 
+**Follow-up (2026-07-29, same day):** the client-facing framing above was
+right, but the *default behaviour* wasn't matching it — `ExtractionFilters`
+excluded numberless members by default, so the "complete record" the UI
+promised wasn't actually what came out. Fixed: all read members are kept by
+default now (name-only for the ones with no number), and export defaults to
+including them too. **This does not change the hard limit** — a number that
+was never rendered on screen still can't be recovered, and can't be stored as
+a contact (`ContactEntity.phoneE164` is required + unique). What changed is
+that those members are no longer silently dropped; they're captured with a
+name and included in every export, just not messageable. Also: the export
+button was simply missing from the screen before this — added, reusing Phase
+2's file-picker pattern exactly.
+
 ## What Phase 1 still needs (a human with the phone, ~10 minutes)
 
 1. Install the debug APK from the CI run on a phone that has WhatsApp.
@@ -152,7 +165,18 @@ Raised by Phase 2 (2026-07-29), not blocking:
   confirming with him that CSV is the format he'll really use before Phase 4
   spends effort on the other four.
 
-## Emulator (added 2026-07-29)
+## Emulator (added 2026-07-29, updated same day)
+
+**The emulator went down entirely between sessions and had to be relaunched**,
+then became unresponsive under memory pressure once booted (a `screencap`
+call timed out after 40s; host free RAM was 0.47 GB with no other session's
+`uiautomator` activity visible — this was host memory exhaustion, not
+contention). This machine cannot reliably sustain the emulator alongside
+everything else running on it. If you hit this: check free RAM before
+assuming a test failure is your code's fault, and don't fight a struggling
+instance — wait or come back rather than repeatedly restarting it, which
+risks making things worse for whoever else needs it.
+
 
 There is a working AVD, `scope_test` (Android 11 / API 30), at
 `C:\Users\ADMIN\AppData\Local\Android\Sdk`. **`CLAUDE.md` has the full
