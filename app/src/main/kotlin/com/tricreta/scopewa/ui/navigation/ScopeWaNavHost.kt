@@ -12,6 +12,7 @@ import com.tricreta.scopewa.data.db.entity.TemplateEntity
 import com.tricreta.scopewa.ui.common.ComingSoonScreen
 import com.tricreta.scopewa.ui.campaign.campaignGraph
 import com.tricreta.scopewa.ui.contacts.contactsGraph
+import com.tricreta.scopewa.ui.groupadd.groupAddGraph
 import com.tricreta.scopewa.ui.home.HomeScreen
 import com.tricreta.scopewa.ui.settings.DiagnosticsScreen
 import com.tricreta.scopewa.ui.settings.SetupScreen
@@ -67,9 +68,8 @@ fun ScopeWaNavHost(
         // Phase 5 — the composer and the live progress screen.
         campaignGraph(navController)
 
-        composable(ScopeWaDestination.GroupAdd.route) {
-            ComingSoonScreen("Group Add", "Lands in Phase 7 — ships last, strictest settings.")
-        }
+        // Phase 7 — the setup screen and the live buckets.
+        groupAddGraph(navController)
         composable(ScopeWaDestination.ActivityLog.route) {
             ComingSoonScreen("Activity log", "Lands in Phase 6 — see architecture doc section 9.")
         }
