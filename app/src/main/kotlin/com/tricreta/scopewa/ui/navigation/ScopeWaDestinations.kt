@@ -14,5 +14,11 @@ enum class ScopeWaDestination(val route: String, val label: String) {
     Running("running", "Running"),
     GroupAdd("group_add", "Group Add"),
     ActivityLog("activity_log", "Activity log"),
-    Settings("settings", "Settings")
+    Settings("settings", "Settings"),
+
+    /** Phase 1: guided Accessibility-permission walkthrough. */
+    Setup("setup", "Setup"),
+
+    /** Phase 1: WhatsApp screen-capture tool for repairing stale selectors. */
+    Diagnostics("diagnostics", "Diagnostics")
 }
