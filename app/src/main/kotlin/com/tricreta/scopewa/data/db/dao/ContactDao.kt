@@ -119,6 +119,20 @@ interface ContactDao {
     )
     suspend fun optOutByNumber(number: String, reason: String?, at: Long)
 
+    /** Feeds the per-person cooldown in architecture doc section 6 layer 3. */
+    @Query("UPDATE contacts SET last_messaged_at = :at, updated_at = :at WHERE id = :id")
+    suspend fun markMessaged(id: Long, at: Long)
+
+    /** A reply arrived — the strongest positive signal there is (section 6 layer 3). */
+    @Query(
+        """
+        UPDATE contacts
+        SET times_replied = times_replied + 1, updated_at = :at
+        WHERE phone_e164 = :number
+        """
+    )
+    suspend fun recordReply(number: String, at: Long)
+
     @Query(
         """
         UPDATE contacts

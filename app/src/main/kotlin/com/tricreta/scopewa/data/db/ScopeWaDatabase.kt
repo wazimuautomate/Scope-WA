@@ -5,6 +5,7 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import com.tricreta.scopewa.data.db.dao.CampaignDao
 import com.tricreta.scopewa.data.db.dao.ContactDao
 import com.tricreta.scopewa.data.db.dao.ContactListDao
 import com.tricreta.scopewa.data.db.dao.SuppressionDao
@@ -52,7 +53,7 @@ import com.tricreta.scopewa.data.db.entity.TemplateEntity
         ContactListMemberEntity::class,
         SuppressionEntity::class,
         // Scaffolded for later phases — see each entity's KDoc for its owner
-        TemplateEntity::class,        // Phase 3
+        TemplateEntity::class,        // Phase 3 — real columns landed with Phase 3
         ExtractionEntity::class,      // Phase 4
         CampaignEntity::class,        // Phase 5
         CampaignMessageEntity::class, // Phase 5
@@ -69,6 +70,7 @@ abstract class ScopeWaDatabase : RoomDatabase() {
     abstract fun contactListDao(): ContactListDao
     abstract fun suppressionDao(): SuppressionDao
     abstract fun templateDao(): TemplateDao
+    abstract fun campaignDao(): CampaignDao
 
     companion object {
         private const val NAME = "scope_wa.db"
@@ -80,6 +82,13 @@ abstract class ScopeWaDatabase : RoomDatabase() {
             instance ?: synchronized(this) {
                 instance ?: build(context.applicationContext).also { instance = it }
             }
+
+        /**
+         * Alias for [get]. Phase 2 and Phase 3 were written in parallel and
+         * picked different names for this; keeping both costs one line and
+         * saves rewriting either phase's call sites.
+         */
+        fun getInstance(context: Context): ScopeWaDatabase = get(context)
 
         private fun build(context: Context): ScopeWaDatabase =
             Room.databaseBuilder(context, ScopeWaDatabase::class.java, NAME)

@@ -6,6 +6,79 @@ merged PR, newest first within each release. Format loosely follows
 
 ## [Unreleased]
 
+### Added — Phase 5: Bulk sender
+
+- **Campaign composer** (`ui/campaign/`) — list + template + pacing profile +
+  WhatsApp target + schedule + preview + Start, per reference screenshots 08
+  and 09. Recurrence is deliberately absent: screenshot 10 is marked SKIP
+  because recurring blasts are a fast ban.
+- **The preview is the point.** Before anything is written it shows how many
+  will be messaged, how many are skipped and why, the uniqueness meter over the
+  *actual* rendered messages, the warm-up day and today's cap, and — when the
+  queue is bigger than the cap allows — plainly says how many people will not
+  be reached today.
+- **Live progress screen** (`ui/running/`) — sent/failed/skipped/pending, the
+  person currently being messaged, a ticking next-in countdown, and Pause /
+  Resume / Stop. Each auto-pause reason is translated into what happened and
+  what to do about it.
+- **Real foreground service** (`jobrunner/CampaignJobService`) replacing the
+  Phase 0 stub: a coroutine loop that asks `CircuitBreaker` before *every*
+  send, takes randomised `PacingPlanner` delays and long breaks, re-checks the
+  suppression list per recipient, holds a wake lock, and writes progress to
+  Room as it goes so a kill costs at most the message in flight.
+- **Send routine** (`accessibility/WaSender`) — opens the documented `wa.me`
+  deep link with the text prefilled, waits for the compose box, inserts a
+  length-proportional typing pause, clicks send, then **verifies the compose
+  box cleared** rather than assuming delivery. Watches for WhatsApp's
+  restriction wording throughout, which is the one outcome that stops the whole
+  campaign instead of counting as a failure.
+- **New pure-Kotlin brain pieces** (`brain/campaign/`), all unit tested in CI
+  without a phone:
+  - `RecipientOrdering` — replied-before first, then saved contacts, then
+    strangers; drops opt-outs, suppressed numbers, per-person cooldown and
+    in-list duplicates. Ordering means a campaign cut short by a cap or a
+    breaker has sent its *safest* messages, not a random slice.
+  - `CampaignEngine` — one `nextStep` decision combining pacing and the five
+    circuit breakers, with safety evaluated before pacing.
+  - `OptOutDetector` — STOP / ACHA / SITAKI / unsubscribe / toa, whole-word,
+    with negation and "stop by" guards.
+  - `RecipientVariables` — the variable map per recipient, where contact
+    identity beats a stale CSV column of the same name.
+  - `TypingDelay`, `PacingProfileCatalog`.
+- **Room**: `campaigns` and `campaign_messages` filled in with real columns, a
+  `CampaignDao`, and a `CampaignRepository`. Messages are rendered when the
+  queue is built, so the uniqueness meter scores exactly what will be sent and
+  a campaign resumed after a reboot sends what the user previewed.
+- The daily cap and warm-up day are computed across **all** campaigns, because
+  the cap belongs to the phone number — three campaigns in one day share one
+  allowance.
+
+### Fixed — Phase 5
+
+- `CircuitBreaker`'s cold-batch rule (`sentInCurrentBatch >=
+  batchSizeForReplyCheck && repliesInCurrentBatch == 0`) is true for all-zeros,
+  so a campaign that hadn't opted into reply tracking would have auto-paused
+  with `ColdBatchNoReplies` before its first message. Worked around in
+  `CampaignEngine` by disabling the rule until a batch is actually being
+  counted, rather than changing a Phase 0 rule other phases depend on.
+
+### Known limitations — Phase 5
+
+- **Not device-tested.** `docs/BUILD-PLAN.md` requires a real-phone send test
+  for Phase 5; there is no Android SDK or handset in this environment, so this
+  is compile-and-unit-test only. It also inherits Phase 1's unverified
+  `WaSelectors` view-ids — if those are wrong, sending cannot work.
+- **Nothing reads incoming replies yet**, so automatic STOP handling is
+  automatic in everything except the noticing: `OptOutDetector` and
+  `CampaignRepository.applyOptOut` are built and tested, but no component
+  observes messages arriving. That needs a `NotificationListenerService`, which
+  this phase does not add. Two consequences: opt-outs are only applied when
+  marked by hand (Phase 2's Blocked tab), and the `ColdBatchNoReplies` breaker
+  can never fire because reply counts are always zero.
+- **No attachments.** The client asked for images/video/audio/documents
+  (architecture doc section 10 Q6). The `wa.me` deep link cannot carry them, so
+  they need a different send path and are not in this phase.
+
 ### Added — Phase 3: Templates
 
 - **Templates screens** (`ui/templates/`) — the editor from architecture doc
