@@ -8,6 +8,44 @@ discipline section. This is not a changelog (that's `CHANGELOG.md`); it's
 
 **Phase 0 — done.** Project skeleton, CI, git repo, and governance docs.
 
+**Phase 3 (Templates) — built and emulator-verified, PR #2 into `features`**
+(2026-07-29). Template list + editor, variable chips, spintax starters, live
+preview cycling 5 renders, uniqueness meter in the doc's exact wording. New
+pure-Kotlin `brain/template/TemplateAnalyzer.kt`,
+`brain/template/TemplateVariables.kt` and
+`brain/uniqueness/UniquenessSummary.kt`, all unit tested. Phase 5 consumes
+these; nothing else does yet.
+
+**Phases 2 (Contacts) and 4 (Group extractor) are in progress in parallel
+sessions** as of the same day. Phase 4 started ahead of its stated
+dependencies.
+
+Still unstarted: Phases 5, 6, 7.
+
+### Phase 3 decisions Phase 2 and Phase 5 need to know
+
+- **Phase 3 landed the Room database, not Phase 2.** `docs/BUILD-PLAN.md`
+  recommended Phase 2 do it, but its rule is "whoever lands first scaffolds all
+  eight tables" — so `data/db/entity/Shells.kt` holds one-line placeholder
+  entities for the seven tables Phase 3 doesn't own. Filling one in is an
+  additive edit to that entity file; nobody needs to touch
+  `data/db/ScopeWaDatabase.kt`'s `@Database(entities = [...])` list again.
+- **`fallbackToDestructiveMigration()` is deliberate and temporary.** Fine while
+  shells are being filled in and no client data exists on any device; it must
+  become real migrations before the first APK ships.
+- **`TemplateEntity.knownVariables` is load-bearing, not metadata.**
+  `TemplateEngine` decides `{name|there}` means "CSV value, or *there* if blank"
+  — rather than a coin flip between two words — by looking `name` up in that
+  set. Phase 5 must pass the stored list to the engine at send time, or
+  templates render differently than they previewed.
+- **The editor's uniqueness meter is a floor, not a prediction.** It holds CSV
+  values constant and measures spintax variation only, because there is no
+  contact list until Phase 2. Phase 5 must recompute it against the real
+  rendered campaign before sending — that is the number section 6 describes.
+- **`ui/home/HomeScreen.kt` has a "Templates" button** next to Phase 1's Setup
+  and Diagnostics buttons. Templates need no Accessibility permission, so the
+  screen is reachable before setup is finished.
+
 **Phase 1 — code complete, NOT device-verified.** Accessibility service,
 node finding, selector capture tooling, the WhatsApp probe, and the guided
 permission walkthrough are all built and CI-green (branch
@@ -168,9 +206,12 @@ Raised by Phase 2 (2026-07-29), not blocking:
 
 ## Environment notes
 
-- No local JDK/Gradle/Android SDK detected on this machine as of 2026-07-29
-  — all builds currently go through GitHub Actions CI. If a future session
-  finds local tooling installed, this note is stale; remove it.
+- The Android SDK **is** installed locally (`~/AppData/Local/Android/Sdk`), but
+  there is **no JDK and no Gradle** on this machine as of 2026-07-29, and the
+  repo has no Gradle wrapper. Nothing can be compiled locally — every build and
+  test result comes from GitHub Actions CI. Installing a JDK 17 would be the
+  single highest-value local change; until then, expect a push-and-wait loop for
+  every compile error.
 - `gh` CLI has multiple accounts authenticated locally (`TricretA`,
   `wazimuautomate`, `Wazimu90`); active account must be `wazimuautomate` for
   this repo (`gh auth switch --hostname github.com --user wazimuautomate`).

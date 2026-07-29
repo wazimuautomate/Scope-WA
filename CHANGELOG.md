@@ -6,6 +6,80 @@ merged PR, newest first within each release. Format loosely follows
 
 ## [Unreleased]
 
+### Added — Phase 3: Templates
+
+- **Templates screens** (`ui/templates/`) — the editor from architecture doc
+  section 7:
+  - Saved-template list with a per-template read-out of how many variables and
+    spintax blocks it has and how many different messages it can produce.
+  - Editor with tappable variable chips (screenshot 11's reference list, but
+    they insert at the caret instead of copying to the clipboard) and one-tap
+    spintax starters for greetings, lead-ins and sign-offs.
+  - **Live preview** cycling through 5 random renders, with a Shuffle button
+    and a count of how many of the five actually came out different. All five
+    use the same sample recipient on purpose, so anything that differs between
+    cards is variation the template itself produces.
+  - **Uniqueness meter** in the doc's exact wording —
+    `200 messages · 194 unique (97%) · 6 exact duplicates` — with the
+    ⚠ warning line, a 100/200/500/1000 campaign-size selector, and a
+    combinations count.
+  - An editable "columns in your CSV" list. This drives `TemplateEngine`'s
+    variable-vs-spintax decision, so `{name|there}` means "name, or *there* if
+    blank" rather than a coin flip between the two words.
+- **`brain/template/TemplateAnalyzer.kt`** — classifies `{...}` blocks the same
+  way `TemplateEngine` renders them, multiplies out spintax combinations
+  (capped at 1e9), generates seeded previews, and estimates campaign
+  uniqueness. Unit tested, including a test that fails if the analyzer and the
+  engine ever disagree about what a block means.
+- **`brain/template/TemplateVariables.kt`** — the variable catalogue behind the
+  chips, plus clock-derived values (`{date}`, `{day_of_week}`,
+  `{random_number}`, …). Screenshot 11's `{LOCATION_*}`/`{BATT}` are
+  deliberately absent: they need Android APIs and `brain/` stays Android-free.
+- **`brain/uniqueness/UniquenessSummary.kt`** — the meter's wording as tested
+  pure functions, since "warn loudly" is a requirement rather than styling.
+- **Room database** (`data/db/`) — `ScopeWaDatabase`, `TemplateEntity`,
+  `TemplateDao`, `TemplateRepository`. Per `docs/BUILD-PLAN.md`'s shared-hotspot
+  rule, the phase that lands the database first declares **all eight** tables
+  from architecture doc section 5.3; the other seven are one-line shells in
+  `data/db/entity/Shells.kt` for their owning phase to fill in without touching
+  `ScopeWaDatabase.kt`. Phase 3 got there before Phase 2, which the build plan
+  had expected to.
+
+### Fixed — a crash CI could not see
+
+- **`Regex("\{([^{}]*)}")` crashed on device.** The unescaped closing brace
+  compiles fine on the JVM, so every unit test passed and CI was green, but
+  Android's ICU-backed regex engine rejects it with `PatternSyntaxException`.
+  `TemplateEngine` (Phase 0) carried the identical pattern, so this was never a
+  Phase 3 bug — it would have taken out Phase 5's send routine the first time it
+  rendered a message on a phone. Fixed in both, with a comment at each site
+  since no JVM test can catch it. Found by installing the CI debug APK on an
+  emulator.
+
+### Changed
+
+- `ui/home/HomeScreen.kt` gained a "Templates" button alongside Phase 1's
+  Setup and Diagnostics buttons. Writing and previewing a template needs no
+  Accessibility permission, so it is reachable before setup is finished.
+- Added `androidx.compose.material:material-icons-core` explicitly rather than
+  relying on it arriving transitively via material3.
+
+### Notes
+
+- The uniqueness meter reports a **floor**. It holds CSV values constant and
+  measures spintax variation only, because the editor has no contact list yet
+  (that's Phase 2) and inventing per-recipient names would inflate the score
+  with variation the template doesn't actually provide. The UI says so on
+  screen. Phase 5 recomputes it against the real list before sending.
+- The database is still built with `fallbackToDestructiveMigration()` while the
+  shell entities are being filled in. That must become real migrations before
+  the first APK reaches the client.
+- **Verified on an emulator, not a phone.** The click-through (list → editor →
+  chips → spintax → preview cycling → uniqueness warning → save → reopen) was
+  done on an API 30 emulator using the CI debug APK. Templates touch no
+  Accessibility APIs, so an emulator is a fair test of this screen; Phase 1's
+  probe still needs a real handset.
+
 ### Added — Phase 1: Accessibility Service + permission walkthrough
 
 - **`WaSelectors` rewritten as ordered fallback candidates** for both
