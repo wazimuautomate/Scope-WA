@@ -17,7 +17,7 @@ parallel sessions, which is why several say "code complete, not verified".
 | 3 — Templates | Code complete, emulator-verified, PR #2 open into `features` |
 | 4 — Group extractor | Code complete, merged with `features`, PR #5 open. **WhatsApp side not device-verified.** |
 | 5 — Bulk sender | Code complete, PR into `features`. **Not device-verified.** |
-| 6 — Activity log / reports | Not started |
+| 6 — Activity log / reports | Code complete, PR into `features`. **Not device-verified**, and never compiled locally — CI is its first compile. |
 | 7 — Group adder | Not started, ships last on purpose |
 
 > ⚠️ **One handset test gates everything that touches WhatsApp.** The view-ids
@@ -182,6 +182,31 @@ and `campaignDao()` together.
 - **Delivery is verified, not assumed.** `WaSender` treats a message as sent
   only when the compose box clears afterwards. Without that check a campaign
   against a restricted account would report a clean 100%.
+- **Phase 6's report logic lives in `data/repository/report/`, not `brain/`.**
+  Same precedent as Phase 2's contact parsers: it belongs to one feature, so it
+  sits in that feature's directory with zero Android imports, and CI unit tests
+  it without a phone. `brain/` stays the cross-cutting anti-ban logic.
+- **A report's success rate is `sent / (sent + failed)` — skips are excluded
+  from the denominator entirely.** This is "a skip is never a failure" carried
+  through to the number the client actually reads. Skips get their own counted,
+  categorised block and an amber chip rather than a red one, because a report
+  that scored a correct opt-out skip as a miss would push the client toward
+  turning the safety layers off. A campaign where everything was skipped reports
+  0 attempted and 0%, not a divide-by-zero.
+- **Skip reasons are classified out of free text, not stored as an enum.**
+  `campaign_messages.error` holds the sentence the Running screen shows
+  ("Messaged in the last 30 days"); `SkipCategory.classify` keyword-matches it
+  back into buckets. If `CampaignRepository.describeSkip`'s wording ever
+  changes, update the classifier's keywords with it — there is a unit test
+  pinning the current sentences.
+- **The activity log excludes `Pending` rows.** The log answers "what
+  happened"; a queued message has not happened yet, and the Running screen is
+  where the live queue belongs. It also orders by `COALESCE(sent_at, 0) DESC,
+  id DESC` because a skipped message never gets a `sent_at`.
+- **CSV escaping is single-sourced in `data/repository/csv/CsvWriter`.**
+  Extracted from `ContactExporter` by Phase 6; a rendered WhatsApp message
+  routinely contains commas, quotes and newlines, and a second escaper would
+  have been a second chance to silently shift every column.
 - **Build order is deliberate: extractor → sender → adder.** Risk increases
   in that order; each phase teaches the Accessibility techniques the next
   needs. Group adder (Phase 7) ships last on purpose.
@@ -228,6 +253,18 @@ Raised by Phase 5 (2026-07-29), **blocking for the feature the client asked for*
   link can only carry text, so attachments need a different send path
   (share-intent into WhatsApp, then drive the picker). Not in Phase 5's
   BUILD-PLAN scope, but the client did ask for it — schedule it explicitly.
+
+Raised by Phase 6 (2026-07-29), not blocking:
+- **The report has no reply or response rate**, because nothing reads incoming
+  WhatsApp messages (see the Phase 5 gap above). "How many people answered" is
+  the figure a client naturally wants off a campaign report, so this gap is now
+  visible in the product, not just in docs. It lands for free once replies are
+  observed.
+- **Nothing prunes `campaign_messages`.** The log is every message ever, which
+  is exactly what makes it a receipt — but at 5,000/day it is ~1.8M rows a year.
+  The query is indexed and paged, so this is a housekeeping question ("delete
+  campaigns older than N months"?) rather than a correctness one. Ask the client
+  before inventing a retention policy.
 
 Raised by Phase 2 (2026-07-29), not blocking:
 - Q8 says extraction exports "as CSV files". Phase 2 also implements TXT, VCF

@@ -9,6 +9,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.tricreta.scopewa.data.db.entity.TemplateEntity
+import com.tricreta.scopewa.ui.activitylog.activityLogGraph
 import com.tricreta.scopewa.ui.common.ComingSoonScreen
 import com.tricreta.scopewa.ui.campaign.campaignGraph
 import com.tricreta.scopewa.ui.contacts.contactsGraph
@@ -70,9 +71,8 @@ fun ScopeWaNavHost(
         composable(ScopeWaDestination.GroupAdd.route) {
             ComingSoonScreen("Group Add", "Lands in Phase 7 — ships last, strictest settings.")
         }
-        composable(ScopeWaDestination.ActivityLog.route) {
-            ComingSoonScreen("Activity log", "Lands in Phase 6 — see architecture doc section 9.")
-        }
+        // Phase 6 — the log of everything sent, and the per-campaign reports.
+        activityLogGraph(navController)
         // Settings currently *is* the setup walkthrough — it covers the
         // WhatsApp-variant choice and permissions health from architecture doc
         // section 7. Pacing profiles, active hours, caps, and warm-up state

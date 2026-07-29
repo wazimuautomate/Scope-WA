@@ -19,6 +19,44 @@ data class CampaignProgress(
     @ColumnInfo(name = "pending") val pending: Int
 )
 
+/**
+ * One row of Phase 6's activity log: a finished message joined to the campaign
+ * it belonged to, so the log can be read without a second query per row.
+ *
+ * The join is a `LEFT JOIN` and [campaignName] is nullable-safe on purpose —
+ * a message outlives its campaign row being deleted, and the log going blank
+ * because a campaign was tidied up would defeat the point of keeping it.
+ */
+data class ActivityLogEntry(
+    @ColumnInfo(name = "id") val id: Long,
+    @ColumnInfo(name = "campaign_id") val campaignId: Long,
+    @ColumnInfo(name = "campaign_name") val campaignName: String?,
+    @ColumnInfo(name = "phone_e164") val phoneE164: String,
+    @ColumnInfo(name = "display_name") val displayName: String,
+    @ColumnInfo(name = "rendered_text") val renderedText: String,
+    @ColumnInfo(name = "status") val status: String,
+    @ColumnInfo(name = "sent_at") val sentAt: Long?,
+    @ColumnInfo(name = "error") val error: String?
+)
+
+/** Per-campaign totals, so a list of campaigns needs one query rather than N. */
+data class CampaignTotals(
+    @ColumnInfo(name = "campaign_id") val campaignId: Long,
+    @ColumnInfo(name = "total") val total: Int,
+    @ColumnInfo(name = "sent") val sent: Int,
+    @ColumnInfo(name = "failed") val failed: Int,
+    @ColumnInfo(name = "skipped") val skipped: Int
+)
+
+/** Sentinel for "don't filter by campaign" — Room can't bind a null Long here. */
+const val ANY_CAMPAIGN: Long = -1L
+
+/**
+ * Sentinel for "don't filter by status". Not a `MessageStatus` name, so it can
+ * never collide with a real one.
+ */
+const val ANY_STATUS: String = "*"
+
 @Dao
 interface CampaignDao {
 
@@ -165,4 +203,101 @@ interface CampaignDao {
     /** Epoch millis of the very first send, ever. Anchors the warm-up ramp. */
     @Query("SELECT MIN(sent_at) FROM campaign_messages WHERE status = 'Sent'")
     suspend fun firstSendAt(): Long?
+
+    // ---- Phase 6: the activity log ----------------------------------------
+
+    /**
+     * Every message that has an outcome, newest first, across every campaign.
+     *
+     * `Pending` rows are excluded deliberately: the activity log answers "what
+     * happened", and a queued message has not happened yet. The Running screen
+     * is where the queue is visible.
+     *
+     * Pass [ANY_CAMPAIGN] / [ANY_STATUS] to skip a filter. Ordering falls back
+     * to the row id because a skipped message never gets a `sent_at` — without
+     * that tiebreak, every skip would pile up at the bottom in insertion order
+     * regardless of when the campaign ran.
+     */
+    @Query(
+        """
+        SELECT
+            m.id AS id,
+            m.campaign_id AS campaign_id,
+            c.name AS campaign_name,
+            m.phone_e164 AS phone_e164,
+            m.display_name AS display_name,
+            m.rendered_text AS rendered_text,
+            m.status AS status,
+            m.sent_at AS sent_at,
+            m.error AS error
+        FROM campaign_messages AS m
+        LEFT JOIN campaigns AS c ON c.id = m.campaign_id
+        WHERE m.status <> 'Pending'
+            AND (:campaignId = -1 OR m.campaign_id = :campaignId)
+            AND (:status = '*' OR m.status = :status)
+        ORDER BY COALESCE(m.sent_at, 0) DESC, m.id DESC
+        LIMIT :limit OFFSET :offset
+        """
+    )
+    fun observeActivityLog(
+        campaignId: Long,
+        status: String,
+        limit: Int,
+        offset: Int
+    ): Flow<List<ActivityLogEntry>>
+
+    /** The same rows, fetched once — what the CSV export reads. */
+    @Query(
+        """
+        SELECT
+            m.id AS id,
+            m.campaign_id AS campaign_id,
+            c.name AS campaign_name,
+            m.phone_e164 AS phone_e164,
+            m.display_name AS display_name,
+            m.rendered_text AS rendered_text,
+            m.status AS status,
+            m.sent_at AS sent_at,
+            m.error AS error
+        FROM campaign_messages AS m
+        LEFT JOIN campaigns AS c ON c.id = m.campaign_id
+        WHERE m.status <> 'Pending'
+            AND (:campaignId = -1 OR m.campaign_id = :campaignId)
+            AND (:status = '*' OR m.status = :status)
+        ORDER BY COALESCE(m.sent_at, 0) DESC, m.id DESC
+        LIMIT :limit OFFSET :offset
+        """
+    )
+    suspend fun activityLog(
+        campaignId: Long,
+        status: String,
+        limit: Int,
+        offset: Int
+    ): List<ActivityLogEntry>
+
+    /** How many rows the current filter would return — drives "load more". */
+    @Query(
+        """
+        SELECT COUNT(*) FROM campaign_messages
+        WHERE status <> 'Pending'
+            AND (:campaignId = -1 OR campaign_id = :campaignId)
+            AND (:status = '*' OR status = :status)
+        """
+    )
+    fun observeActivityLogCount(campaignId: Long, status: String): Flow<Int>
+
+    /** Totals for every campaign at once, so the reports list needs one query. */
+    @Query(
+        """
+        SELECT
+            campaign_id AS campaign_id,
+            COUNT(*) AS total,
+            COALESCE(SUM(status = 'Sent'), 0) AS sent,
+            COALESCE(SUM(status = 'Failed'), 0) AS failed,
+            COALESCE(SUM(status = 'Skipped'), 0) AS skipped
+        FROM campaign_messages
+        GROUP BY campaign_id
+        """
+    )
+    fun observeCampaignTotals(): Flow<List<CampaignTotals>>
 }

@@ -3,6 +3,7 @@ package com.tricreta.scopewa.ui.navigation
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Send
@@ -29,13 +30,16 @@ import androidx.navigation.compose.currentBackStackEntryAsState
  */
 private enum class BottomDestination(
     val destination: ScopeWaDestination,
-    val icon: ImageVector
+    val icon: ImageVector,
+    /** Shorter than the destination's own label where the bar would otherwise wrap. */
+    val label: String = destination.label
 ) {
     Home(ScopeWaDestination.Home, Icons.Default.Home),
     Contacts(ScopeWaDestination.Contacts, Icons.Default.Person),
     Extract(ScopeWaDestination.Extract, Icons.Default.Search),
     Campaign(ScopeWaDestination.Campaign, Icons.Default.Send),
     Templates(ScopeWaDestination.Templates, Icons.AutoMirrored.Filled.List),
+    ActivityLog(ScopeWaDestination.ActivityLog, Icons.Default.Info, "Activity"),
     Settings(ScopeWaDestination.Settings, Icons.Default.Settings)
 }
 
@@ -60,7 +64,7 @@ fun ScopeWaBottomBar(navController: NavHostController) {
                     }
                 },
                 icon = { Icon(entry.icon, contentDescription = null) },
-                label = { Text(entry.destination.label) }
+                label = { Text(entry.label) }
             )
         }
     }
