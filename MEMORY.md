@@ -6,13 +6,38 @@ discipline section. This is not a changelog (that's `CHANGELOG.md`); it's
 
 ## Current phase
 
-**Phase 0 — done.** Project skeleton, CI, git repo, and governance docs are
-in place. No phase-1-through-7 work has started yet.
+**Phase 0 — done.** Project skeleton, CI, git repo, and governance docs.
 
-Next up: Phases 1 (Accessibility Service), 2 (Contacts), and 3 (Templates)
-can all start in parallel — see `docs/BUILD-PLAN.md` for scope and file
-ownership per phase. Phase 1 needs a physical Android device and is the long
-pole; start it first even though it doesn't block 2 or 3.
+**Phase 1 — code complete, NOT device-verified.** Accessibility service,
+node finding, selector capture tooling, the WhatsApp probe, and the guided
+permission walkthrough are all built and CI-green (branch
+`phase-1-accessibility`).
+
+> ⚠️ **Phase 1's acceptance criterion is not yet met.** `docs/BUILD-PLAN.md`
+> requires it to work "on a real phone", and nothing here has touched one.
+> The WhatsApp view-ids in `accessibility/WaSelectors.kt` are researched
+> candidates, not captured from a device — they may simply be wrong. **Do not
+> treat Phase 1 as done, and do not start Phase 4, 5, or 7, until someone runs
+> the in-app test on a real handset.** See "What Phase 1 still needs" below.
+
+Phases 2 (Contacts) and 3 (Templates) are being built in parallel by other
+sessions and depend on none of this.
+
+## What Phase 1 still needs (a human with the phone, ~10 minutes)
+
+1. Install the debug APK from the CI run on a phone that has WhatsApp.
+2. Open Scope WA → **Finish setup**, work through the steps, grant Accessibility.
+3. Run **Test it**. Then:
+   - **"WhatsApp automation is working"** → Phase 1 is genuinely done. Record
+     the WhatsApp version it reported here, and phases 4/5/7 are unblocked.
+   - **"message box wasn't recognised"** → the permission works but the
+     selectors are wrong, which is the expected outcome if the researched ids
+     are stale. Use **Diagnostics → Start capture**, switch to a WhatsApp chat,
+     share the dump, and correct `WaSelectors.kt` from it. This is a one-line
+     fix per selector, by design.
+4. Repeat on both WhatsApp and WhatsApp Business, and on both a Samsung and a
+   Tecno handset if available — OEM builds differ, and the client uses both
+   (architecture doc section 10, Q4).
 
 ## Key decisions on record
 
@@ -55,6 +80,26 @@ All answered as of the architecture doc's writing (2026-07-29):
 
 Nothing outstanding from the client as of Phase 0. If a later phase surfaces
 a new open question, add it here with the date it came up.
+
+## Things learned while building (don't rediscover these)
+
+- **Android 13+ blocks Accessibility for sideloaded apps.** The toggle appears
+  but is greyed out until the user does App info → ⋮ → *Allow restricted
+  settings*. Scope WA is direct-install by design (architecture doc section 4),
+  so this hits every install on a modern phone. The setup walkthrough covers
+  it; don't remove that step thinking it's redundant.
+- **"Enabled in Settings" ≠ "connected".** The service can be ticked in
+  Android Settings without being bound (briefly after toggling, and after a
+  force-stop on some OEM builds). Readiness checks must use
+  `WaServiceBridge.isConnected`, not the Settings value.
+- **Content-descriptions are localised.** "Type a message" doesn't exist on a
+  Swahili phone. Anything on the critical send path needs a view-id candidate;
+  there's a unit test enforcing this.
+- **`URLEncoder` breaks wa.me links.** It form-encodes spaces as `+`, which
+  WhatsApp renders literally — messages arrive with plus signs between every
+  word. `WaDeepLink` converts to `%20`; there's a test pinning it.
+- **CI didn't run on phase branches** until Phase 1 fixed `ci.yml`. If a
+  branch seems to have no checks, that's the shape of the bug to look for.
 
 ## Known risks to keep front of mind
 
