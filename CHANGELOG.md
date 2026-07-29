@@ -6,8 +6,54 @@ merged PR, newest first within each release. Format loosely follows
 
 ## [Unreleased]
 
-Nothing merged into `features` yet — Phase 0 landed directly on `main` (see
-`CLAUDE.md` for why that was a one-time exception).
+### Added — Phase 2: Contacts
+
+- **Room schema.** All eight tables from architecture doc section 5.3 are
+  registered in `ScopeWaDatabase` in one go, as `docs/BUILD-PLAN.md` asks, so
+  later phases add fields and DAOs rather than new `@Database` entries.
+  `contacts`, `contact_lists`, `suppression_list` and the `contact_list_members`
+  join are fully built and used; `templates`, `campaigns`, `campaign_messages`,
+  `group_add_jobs`, `extractions` and `settings` are documented scaffolds owned
+  by the phase named in each entity's KDoc.
+  - Two tables the section 5.3 prose doesn't name were needed: the
+    contacts↔lists join, and `suppression_list`. The latter is keyed by number
+    rather than contact id so a STOP block survives a contact being deleted and
+    the same CSV re-imported.
+  - `contacts.custom_fields` keeps the leftover CSV columns (`town`,
+    `last_bundle`, …). Without it the CSV-variable half of section 6 layer 1
+    would have nothing to substitute in Phase 5.
+- **CSV / VCF / TXT import**, ported to Kotlin from the proven Chrome
+  extensions in `docs/reference/` (`lib/parse.js`, `lib/csv.js`). All parsing is
+  pure Kotlin with no Android imports, so CI tests it without a phone.
+  - CSV: RFC-4180-ish — quoted fields, embedded commas and newlines, escaped
+    quotes, CRLF/LF/CR, BOM. Duplicate and blank headers are renamed rather than
+    silently swallowing a column.
+  - VCF: adds quoted-printable decoding (what Android's own contact export
+    produces for any accented name), every `TEL` line rather than only the
+    first, and Apple-style `item1.TEL` grouping.
+  - TXT: `number`, `number,name`, `name,number`, tab- and semicolon-separated.
+- **Dedupe and normalisation** through the existing Phase 0 `PhoneNormalizer`.
+  An import is planned before it is applied: the user sees new / already-known /
+  duplicate-in-file / blocked / unusable counts and confirms, instead of finding
+  out after 20,000 rows have landed.
+- **Lists, bulk-select picker and export** — the screens from reference
+  screenshots 02, 03 and 04. Export writes CSV, TXT, VCF or JSON **files** via
+  the Storage Access Framework; per the client's answer in section 10 Q8,
+  nothing is ever written to the phone's address book.
+- **`opted_out` flag and suppression list** (section 6 layer 3), ready for
+  Phase 5's STOP/ACHA/SITAKI handling. Suppressed numbers are dropped on import,
+  not imported and flagged.
+- A minimal bottom navigation bar, because the Phase 0 skeleton starts on Home
+  and Home had no links — the Contacts screens were otherwise unreachable.
+  Deliberately throwaway; Phase 1 should replace it when Home lands.
+
+### Changed
+
+- `ci.yml` now also runs on pull requests into `features`, and can be triggered
+  manually. `CLAUDE.md` requires green CI before a phase branch merges into
+  `features`, which the previous `pull_request: branches: [main]` trigger made
+  impossible.
+- Added `androidx.lifecycle:lifecycle-viewmodel-compose` to the version catalog.
 
 ## [0.1.0] — 2026-07-29 — Phase 0: project skeleton
 

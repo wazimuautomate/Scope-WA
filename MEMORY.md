@@ -6,13 +6,21 @@ discipline section. This is not a changelog (that's `CHANGELOG.md`); it's
 
 ## Current phase
 
-**Phase 0 — done.** Project skeleton, CI, git repo, and governance docs are
-in place. No phase-1-through-7 work has started yet.
+**Phase 0 — done.** Project skeleton, CI, git repo, and governance docs.
 
-Next up: Phases 1 (Accessibility Service), 2 (Contacts), and 3 (Templates)
-can all start in parallel — see `docs/BUILD-PLAN.md` for scope and file
-ownership per phase. Phase 1 needs a physical Android device and is the long
-pole; start it first even though it doesn't block 2 or 3.
+**Phase 2 (Contacts) — built on `phase-2-contacts`, PR open into `features`
+(2026-07-29).** Room schema (all ten tables), CSV/VCF/TXT import with dedupe
+and a confirm-before-you-write preview, lists + bulk-select picker,
+CSV/TXT/VCF/JSON file export, and the `opted_out` + suppression plumbing Phase 5
+needs for STOP handling. Verified by CI only — compile plus unit tests. No
+device test was done and none is needed: Phase 2 touches no Accessibility code.
+
+**Phases 1 and 3 ran in parallel in other sessions** (`phase-3-templates` has
+its own worktree; a session was also editing `accessibility/` and
+`brain/whatsapp/`, i.e. Phase 1). Phase 2 no longer blocks anything.
+
+Next up: Phase 4 (extractor) unblocks once Phase 1 lands; Phase 5 needs 1, 2
+and 3. See `docs/BUILD-PLAN.md`.
 
 ## Key decisions on record
 
@@ -26,6 +34,31 @@ pole; start it first even though it doesn't block 2 or 3.
   Accessibility + bulk messaging would be rejected outright.
 - **Extraction is export-only — never writes to the phone's contacts app.**
   Explicit client instruction (architecture doc section 10, Q8).
+- **Phase 2 scaffolded all ten Room tables at once** (the eight in architecture
+  doc section 5.3 plus `contact_list_members` and `suppression_list`), exactly
+  as `docs/BUILD-PLAN.md`'s shared-hotspots section asks. Later phases add
+  *fields and DAOs* to their own entity; nobody adds new `entities = [...]`
+  entries. `TemplateEntity` is a shell — **if Phase 3's branch defines a richer
+  one, take theirs at merge time**; only the `@Database` list has to stay
+  single-sourced.
+- **`suppression_list` is keyed by phone number, not contact id.** A STOP block
+  has to survive the contact being deleted and the same CSV re-imported, which
+  is precisely the case where a quietly resurrected opt-out does real damage.
+  `contacts.opted_out` and this table are kept in sync by `ContactsRepository`.
+- **Contacts keep a `custom_fields` map of the leftover CSV columns.** Section 6
+  layer 1 promises any CSV column can be a template variable; without this
+  Phase 5 would have nothing to substitute.
+- **Room schema export is off and migrations are destructive, deliberately, and
+  only until the first release.** Nothing has shipped, so there's no user data
+  to migrate and a committed schema would just record guesses later phases
+  change. **Before the first signed release:** turn `exportSchema` on, add the
+  `room.schemaLocation` KSP arg, commit the schema, drop
+  `fallbackToDestructiveMigration()`.
+- **Pure logic lives outside `brain/` when it belongs to a feature.** The
+  contact parsers/importer/exporter sit in `data/repository/contacts/` (Phase 2's
+  owned directory) but have zero Android imports, so CI still tests them without
+  a phone. `brain/` stays the cross-cutting anti-ban logic; the `brain/` rule in
+  `CLAUDE.md` is "no Android in brain", not "all pure code in brain".
 - **Build order is deliberate: extractor → sender → adder.** Risk increases
   in that order; each phase teaches the Accessibility techniques the next
   needs. Group adder (Phase 7) ships last on purpose.
@@ -56,6 +89,14 @@ All answered as of the architecture doc's writing (2026-07-29):
 Nothing outstanding from the client as of Phase 0. If a later phase surfaces
 a new open question, add it here with the date it came up.
 
+Raised by Phase 2 (2026-07-29), not blocking:
+- Q8 says extraction exports "as CSV files". Phase 2 also implements TXT, VCF
+  and JSON export because the reference extension had them and they're nearly
+  free. **XLSX is deliberately not implemented** — it needs a ZIP writer and
+  belongs with Phase 4, where the client actually asked for it. Worth
+  confirming with him that CSV is the format he'll really use before Phase 4
+  spends effort on the other four.
+
 ## Known risks to keep front of mind
 
 - Ban risk is reduced, not eliminated, at any volume — this must stay
@@ -74,3 +115,13 @@ a new open question, add it here with the date it came up.
 - `gh` CLI has multiple accounts authenticated locally (`TricretA`,
   `wazimuautomate`, `Wazimu90`); active account must be `wazimuautomate` for
   this repo (`gh auth switch --hostname github.com --user wazimuautomate`).
+- **Parallel sessions share one checkout — use `git worktree`.** Two sessions
+  running in `C:\Users\ADMIN\OneDrive\Desktop\Scope WA` at once will fight over
+  the branch and each other's uncommitted files (this happened on 2026-07-29:
+  a `git checkout -b` moved the branch out from under another session's
+  in-progress edits). Phase 2 and Phase 3 each ran from
+  `git worktree add <dir> -b phase-N-<name> origin/features`. Do that.
+- `ci.yml` runs on pushes to `main`/`features`, PRs into either, and
+  `workflow_dispatch`. A push to a `phase-*` branch alone does **not** trigger
+  it — run `gh workflow run ci.yml --ref <branch>` to check a phase branch
+  before opening its PR.
