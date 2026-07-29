@@ -5,6 +5,7 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import com.tricreta.scopewa.data.db.dao.CampaignDao
 import com.tricreta.scopewa.data.db.dao.ContactDao
 import com.tricreta.scopewa.data.db.dao.ContactListDao
 import com.tricreta.scopewa.data.db.dao.SuppressionDao
@@ -69,6 +70,7 @@ abstract class ScopeWaDatabase : RoomDatabase() {
     abstract fun contactListDao(): ContactListDao
     abstract fun suppressionDao(): SuppressionDao
     abstract fun templateDao(): TemplateDao
+    abstract fun campaignDao(): CampaignDao
 
     companion object {
         private const val NAME = "scope_wa.db"

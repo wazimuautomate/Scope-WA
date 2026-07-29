@@ -10,6 +10,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.tricreta.scopewa.data.db.entity.TemplateEntity
 import com.tricreta.scopewa.ui.common.ComingSoonScreen
+import com.tricreta.scopewa.ui.campaign.campaignGraph
 import com.tricreta.scopewa.ui.contacts.contactsGraph
 import com.tricreta.scopewa.ui.home.HomeScreen
 import com.tricreta.scopewa.ui.settings.DiagnosticsScreen
@@ -64,12 +65,9 @@ fun ScopeWaNavHost(
                 onDone = { navController.popBackStack() }
             )
         }
-        composable(ScopeWaDestination.Campaign.route) {
-            ComingSoonScreen("Campaign", "Lands in Phase 5 — see architecture doc section 9.")
-        }
-        composable(ScopeWaDestination.Running.route) {
-            ComingSoonScreen("Running", "Lands in Phase 5 — see architecture doc section 9.")
-        }
+        // Phase 5 — the composer and the live progress screen.
+        campaignGraph(navController)
+
         composable(ScopeWaDestination.GroupAdd.route) {
             ComingSoonScreen("Group Add", "Lands in Phase 7 — ships last, strictest settings.")
         }
